@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>家庭能源分析 · 界面原型</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9">
+          <path d="M13 2 4.4 13.7h6.3L10 22l8.8-12h-6.4L13 2Z"></path>
+        </svg>
+      </div>
+      <div>
+        <h1 class="brand-name">WattHome</h1>
+        <span class="brand-sub">家庭能源分析</span>
+      </div>
+    </div>
+    <div class="topbar-right">
+      <span class="status-pill"><span class="status-dot"></span>模型已加载</span>
+      <span class="date-copy">数据截至 2023-12-31</span>
+      <div class="user-pill">
+        <div class="avatar">林</div>
+        <div>
+          <span class="user-name">林晨</span>
+          <span class="user-role">普通用户 · 5 户</span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <div class="shell">
+    <aside class="sidebar" aria-label="我的家庭">
+      <div class="sidebar-head">
+        <p class="eyebrow">MY HOUSEHOLDS</p>
+        <h2 class="sidebar-title">我的家庭 <span class="count-badge" id="sidebarHouseCount">5</span></h2>
+        <p class="sidebar-caption">勾选需要对比的家庭，最多同时查看 5 户。</p>
+      </div>
+
+      <div class="house-list" id="houseList"></div>
+
+      <div class="selection-panel">
+        <div class="selection-line">
+          <span>对比选择</span>
+          <strong id="selectionCount">3 / 5</strong>
+        </div>
+        <div class="selection-progress" aria-hidden="true">
+          <span id="selectionProgress"></span>
+        </div>
+      </div>
+
+      <div class="rule-note">
+        <b>访问规则：</b>一个用户可以拥有多个家庭，但每个家庭只归属一个用户。当前列表仅包含林晨名下的家庭。
+      </div>
+
+      <div class="model-status">
+        <span>预训练模型</span>
+        <span>rf-v1 · 仅推理</span>
+      </div>
+    </aside>
+
+    <main class="content">
+      <section class="page-head">
+        <div>
+          <p class="eyebrow">ENERGY OVERVIEW · 2023.12</p>
+          <h1>今天，家里用了多少电？</h1>
+          <p>林晨，这是你名下 5 户家庭的用电概览。选择家庭后，趋势和对比摘要会同步更新；用电预测可按月份单独打开。</p>
+        </div>
+        <span class="prototype-chip">演示原型 · 模拟数据</span>
+      </section>
+
+      <section class="toolbar" aria-label="图表筛选">
+        <div class="range-tabs" id="rangeTabs">
+          <button class="range-tab" type="button" data-range="7">近 7 天</button>
+          <button class="range-tab active" type="button" data-range="30">近 30 天</button>
+          <button class="range-tab" type="button" data-range="12">近 12 月</button>
+        </div>
+        <div class="toolbar-actions">
+          <label class="switch">
+            <input type="checkbox" id="averageToggle" checked>
+            叠加全部家庭均值
+          </label>
+          <label class="select-wrap">
+            电器
+            <select id="applianceFilter">
+              <option value="all">全部电器</option>
+              <option value="exclude_ac">排除空调</option>
+              <option value="exclude_heater">排除热水器</option>
+              <option value="exclude_fridge">排除冰箱</option>
+            </select>
+            <span class="chevron">▾</span>
+          </label>
+        </div>
+      </section>
+
+      <section class="stats" aria-label="关键指标">
+        <article class="metric-card" style="--metric-color:#087f70;--metric-soft:#e2f7f1;--metric-glow:rgba(8,127,112,.08)">
+          <div class="metric-top">
+            <span class="metric-label">所选家庭日均</span>
+            <span class="metric-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M13 2 4.4 13.7h6.3L10 22l8.8-12h-6.4L13 2Z"></path></svg>
+            </span>
+          </div>
+          <div class="metric-value" id="metricDaily">9.2 <small>kWh</small></div>
+          <div class="metric-meta" id="metricDailyMeta">近 30 天 · 3 户家庭</div>
+        </article>
+
+        <article class="metric-card" style="--metric-color:#d68818;--metric-soft:#fdf2df;--metric-glow:rgba(214,136,24,.08)">
+          <div class="metric-top">
+            <span class="metric-label">平均室外温度</span>
+            <span class="metric-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M10 13.8V5a2 2 0 1 1 4 0v8.8a4 4 0 1 1-4 0Z"></path><path d="M12 9v7"></path></svg>
+            </span>
+          </div>
+          <div class="metric-value" id="metricTemp">15.1 <small>°C</small></div>
+          <div class="metric-meta">来自当前所选家庭</div>
+        </article>
+
+        <article class="metric-card" style="--metric-color:#2f65d9;--metric-soft:#edf2ff;--metric-glow:rgba(47,101,217,.08)">
+          <div class="metric-top">
+            <span class="metric-label">对比全部家庭</span>
+            <span class="metric-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 20V10M12 20V4M19 20v-7"></path><path d="M3 20h18"></path></svg>
+            </span>
+          </div>
+          <div class="metric-value" id="metricCompare">+8.4 <small>%</small></div>
+          <div class="metric-meta">所选家庭 vs 全部家庭日均</div>
+        </article>
+
+        <article class="metric-card" style="--metric-color:#7458c8;--metric-soft:#f1edff;--metric-glow:rgba(116,88,200,.08)">
+          <div class="metric-top">
+            <span class="metric-label">有效读数占比</span>
+            <span class="metric-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3 5 6v5c0 4.5 2.9 8.2 7 10 4.1-1.8 7-5.5 7-10V6l-7-3Z"></path><path d="m9 12 2 2 4-4"></path></svg>
+            </span>
+          </div>
+          <div class="metric-value" id="metricQuality">99.7 <small>%</small></div>
+          <div class="metric-meta">异常与重复记录不进入训练视图</div>
+        </article>
+      </section>
+
+      <section class="main-grid">
+        <article class="card chart-card">
+          <div class="card-head">
+            <div>
+              <h2 class="card-title">用电趋势对比</h2>
+              <p class="card-sub">每户每日总用电量 · 单位 kWh</p>
+            </div>
+            <span class="compare-badge" id="chartCompareBadge">对比 3 户</span>
+          </div>
+          <div class="chart-legend" id="chartLegend"></div>
+          <div class="chart-wrap" id="chartWrap">
+            <svg class="chart-svg" id="chart" viewBox="0 0 960 470" role="img" aria-label="所选家庭用电趋势折线图"></svg>
+            <div class="chart-tooltip" id="chartTooltip"></div>
+          </div>
+          <div class="chart-insights" id="chartInsights"></div>
+        </article>
+
+        <div class="side-stack">
+          <article class="prediction-card prediction-launcher">
+            <span class="model-pill">PRETRAINED · DAILY FORECAST</span>
+            <h2>按月预测每日用电</h2>
+            <p>选择预测月份、房屋和居住人口，模型会返回该房屋在典型日的用电量。</p>
+            <div class="launcher-facts">
+              <span><strong>12</strong><small>个月</small></span>
+              <span><strong>5</strong><small>户房屋</small></span>
+              <span><strong>rf-v1</strong><small>模型</small></span>
+            </div>
+            <button class="prediction-open" type="button" id="openPredictBtn">
+              <span>打开预测面板</span>
+              <span aria-hidden="true">→</span>
+            </button>
+            <p class="prediction-hint">预训练模型在线推理，不会触发训练或重训。</p>
+          </article>
+
+          <article class="card quality-card">
+            <div class="ring" id="qualityRing" style="--pct:99.7">
+              <div class="ring-copy">
+                <strong id="qualityNumber">99.7%</strong>
+                <span>VALID</span>
+              </div>
+            </div>
+            <div class="quality-copy">
+              <h2>数据质量摘要</h2>
+              <p>训练视图只读取 <code>quality_flag = 'ok'</code> 的记录。</p>
+              <div class="quality-checks">
+                <span>4 条重复</span>
+                <span>96 条季节异常</span>
+                <span>4 条字段缺失</span>
+              </div>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="bottom-grid">
+        <article class="card breakdown-card">
+          <div class="breakdown-head">
+            <div>
+              <h2>电器用电占比</h2>
+              <p>所选家庭 · 2023 年 12 月</p>
+            </div>
+            <span class="mini-label">MONTHLY SHARE</span>
+          </div>
+          <div class="bar-list" id="applianceBars"></div>
+        </article>
+
+        <article class="card compare-card">
+          <div class="compare-head">
+            <div>
+              <h2>家庭对比摘要</h2>
+              <p id="compareSummary">3 户家庭 · 按日均用电排序</p>
+            </div>
+            <span class="mini-label">UP TO 5</span>
+          </div>
+          <table class="compare-table">
+            <thead>
+              <tr>
+                <th>家庭</th>
+                <th>人数</th>
+                <th>日均</th>
+                <th>人均</th>
+                <th>温度</th>
+              </tr>
+            </thead>
+            <tbody id="compareBody"></tbody>
+          </table>
+          <p class="table-note" id="compareNote">当前选中 3 户，最大平均温差 2.4°C。</p>
+        </article>
+      </section>
+
+      <p class="footer-note">界面原型使用本地模拟数据，尚未连接 FastAPI。模型为离线预训练版本，页面仅展示推理交互。</p>
+    </main>
+  </div>
+
+  <div class="modal-backdrop" id="predictModal" aria-hidden="true">
+    <section class="predict-modal" role="dialog" aria-modal="true" aria-labelledby="predictTitle" tabindex="-1">
+      <header class="predict-modal-head">
+        <div>
+          <span class="model-pill modal-pill">PRETRAINED · DAILY FORECAST</span>
+          <h2 id="predictTitle">预测每日用电量</h2>
+          <p>选择日期（月份）、房屋并填写居住人口，模型会给出该月典型日的用电量。</p>
+        </div>
+        <button class="modal-close" type="button" id="closePredictBtn" aria-label="关闭预测弹窗">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+            <path d="m6 6 12 12M18 6 6 18"></path>
+          </svg>
+        </button>
+      </header>
+
+      <div class="predict-modal-body">
+        <form class="forecast-form" id="predictForm">
+          <div class="forecast-field">
+            <label for="predictMonth">选择日期 <span>（月份）</span></label>
+            <div class="forecast-control">
+              <select id="predictMonth" name="month" required></select>
+              <span class="forecast-chevron" aria-hidden="true">▾</span>
+            </div>
+          </div>
+
+          <div class="forecast-field">
+            <label for="predictPopulation">居住人口</label>
+            <div class="population-stepper">
+              <button type="button" id="populationMinus" aria-label="减少人口">−</button>
+              <input type="number" id="predictPopulation" name="population" min="1" max="20" step="1" value="3" required>
+              <span>人</span>
+              <button type="button" id="populationPlus" aria-label="增加人口">+</button>
+            </div>
+          </div>
+
+          <div class="forecast-field form-span">
+            <label for="predictHouse">选择房屋</label>
+            <div class="forecast-control">
+              <select id="predictHouse" name="house" required></select>
+              <span class="forecast-chevron" aria-hidden="true">▾</span>
+            </div>
+          </div>
+
+          <p class="forecast-help">月份用于季节性修正；人口会按房屋历史基准调整用电量。</p>
+          <button class="forecast-submit" type="submit">
+            <span>生成预测</span>
+            <span aria-hidden="true">→</span>
+          </button>
+        </form>
+
+        <aside class="forecast-output" aria-live="polite">
+          <div class="output-head">
+            <span class="result-label">预计每日用电</span>
+            <span class="model-tag">RF-V1</span>
+          </div>
+          <div class="forecast-value" id="predictedValue">— <small>kWh/日</small></div>
+          <div class="result-meta" id="predictionMeta">选择条件后生成预测</div>
+          <div class="output-divider"></div>
+          <div class="output-facts">
+            <div><span>月份</span><strong id="resultMonth">12 月</strong></div>
+            <div><span>房屋</span><strong id="resultHouse">青羊 · 河畔家</strong></div>
+            <div><span>人口</span><strong id="resultPopulation">3 人</strong></div>
+          </div>
+          <p class="output-note">结果为该房屋在指定月份的平均日用电量，单位 kWh/日。</p>
+        </aside>
+      </div>
+    </section>
+  </div>
+
+  <div class="toast" id="toast" aria-live="polite"></div>
+  <script src="app.js"></script>
+</body>
+</html>
