@@ -1,11 +1,34 @@
-# Test your FastAPI endpoints
-
-GET http://127.0.0.1:8000/
-Accept: application/json
+@baseUrl = http://127.0.0.1:8000
+@token = paste-access-token-here
 
 ###
+POST {{baseUrl}}/api/v1/auth/login
+Content-Type: application/json
 
-GET http://127.0.0.1:8000/hello/User
-Accept: application/json
+{
+  "username": "demo1",
+  "password": "demo123"
+}
 
 ###
+GET {{baseUrl}}/api/v1/auth/me
+Authorization: Bearer {{token}}
+
+###
+GET {{baseUrl}}/api/v1/households
+Authorization: Bearer {{token}}
+
+###
+GET {{baseUrl}}/api/v1/consumption/series?household_ids=94&household_ids=435&granularity=month
+Authorization: Bearer {{token}}
+
+###
+POST {{baseUrl}}/api/v1/ai/predict
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "household_id": 94,
+  "month": 12,
+  "household_size": 3
+}
