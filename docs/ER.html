@@ -1,0 +1,1740 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>家庭用电量分析 · 数据库 ER 图</title>
+  <style>
+    :root {
+      --bg: #f4f6fb;
+      --panel: #ffffff;
+      --ink: #0f172a;
+      --muted: #64748b;
+      --line: #e2e8f0;
+      --accent: #2563eb;
+      --shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      height: 100%;
+      margin: 0;
+      overflow: hidden;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+        "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    }
+
+    .app {
+      display: grid;
+      grid-template-rows: 68px 1fr;
+      height: 100vh;
+    }
+
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 24px;
+      padding: 0 22px;
+      background: rgba(255, 255, 255, 0.92);
+      border-bottom: 1px solid var(--line);
+      backdrop-filter: blur(12px);
+      z-index: 5;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      min-width: 0;
+    }
+
+    .logo {
+      width: 42px;
+      height: 42px;
+      border-radius: 12px;
+      display: grid;
+      place-items: center;
+      color: #fff;
+      font-weight: 800;
+      font-size: 15px;
+      letter-spacing: 0.5px;
+      background: linear-gradient(135deg, #2563eb, #7c3aed);
+      box-shadow: 0 8px 20px rgba(37, 99, 235, 0.28);
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 18px;
+      line-height: 1.15;
+      white-space: nowrap;
+    }
+
+    .subtitle {
+      margin: 4px 0 0;
+      color: var(--muted);
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
+    .actions {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    button,
+    .switch {
+      height: 34px;
+      border-radius: 9px;
+      border: 1px solid var(--line);
+      background: #fff;
+      color: #334155;
+      font-size: 12px;
+      font-weight: 600;
+      padding: 0 12px;
+      cursor: pointer;
+      transition: 0.16s ease;
+    }
+
+    button:hover {
+      border-color: #bfdbfe;
+      background: #f8fbff;
+      color: var(--accent);
+    }
+
+    .switch {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      cursor: pointer;
+    }
+
+    .switch input { accent-color: var(--accent); }
+
+    main {
+      display: grid;
+      grid-template-columns: 268px minmax(0, 1fr) 332px;
+      min-height: 0;
+    }
+
+    aside {
+      background: var(--panel);
+      min-height: 0;
+    }
+
+    .sidebar {
+      border-right: 1px solid var(--line);
+      padding: 16px 14px 22px;
+      overflow: auto;
+    }
+
+    .details {
+      border-left: 1px solid var(--line);
+      padding: 18px 18px 30px;
+      overflow: auto;
+    }
+
+    .search {
+      position: sticky;
+      top: 0;
+      z-index: 2;
+      padding: 0 0 12px;
+      background: var(--panel);
+    }
+
+    .search input {
+      width: 100%;
+      height: 38px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 0 12px;
+      outline: none;
+      font-size: 12.5px;
+      background: #fbfcff;
+      transition: 0.16s ease;
+    }
+
+    .search input:focus {
+      border-color: #93c5fd;
+      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+      background: #fff;
+    }
+
+    .section-title {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin: 14px 2px 8px;
+      color: #475569;
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .section-title span {
+      color: #94a3b8;
+      font-weight: 600;
+      letter-spacing: 0;
+    }
+
+    .table-list {
+      display: grid;
+      gap: 5px;
+    }
+
+    .table-btn {
+      width: 100%;
+      height: auto;
+      min-height: 46px;
+      padding: 8px 9px;
+      display: grid;
+      grid-template-columns: 10px minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 9px;
+      text-align: left;
+      background: #fff;
+      border-color: transparent;
+      border-radius: 10px;
+    }
+
+    .table-btn:hover {
+      background: #f7faff;
+      border-color: #dbeafe;
+    }
+
+    .table-btn.selected {
+      background: #eff6ff;
+      border-color: #93c5fd;
+      color: #1d4ed8;
+    }
+
+    .table-btn.muted {
+      opacity: 0.45;
+    }
+
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      box-shadow: 0 0 0 3px rgba(148, 163, 184, 0.12);
+    }
+
+    .btn-main {
+      display: grid;
+      gap: 2px;
+      min-width: 0;
+    }
+
+    .btn-name {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 12.5px;
+      font-weight: 700;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .btn-title {
+      color: var(--muted);
+      font-size: 10.5px;
+      font-weight: 500;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .btn-count {
+      min-width: 24px;
+      height: 20px;
+      padding: 0 6px;
+      border-radius: 7px;
+      display: grid;
+      place-items: center;
+      background: #f1f5f9;
+      color: #64748b;
+      font-size: 10px;
+      font-weight: 700;
+    }
+
+    .empty-list {
+      padding: 14px 10px;
+      color: #94a3b8;
+      font-size: 12px;
+      text-align: center;
+      border: 1px dashed #e2e8f0;
+      border-radius: 10px;
+    }
+
+    .legend {
+      margin-top: 20px;
+      padding: 12px;
+      border-radius: 12px;
+      background: #f8fafc;
+      border: 1px solid #eef2f7;
+      display: grid;
+      gap: 8px;
+    }
+
+    .legend-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: #64748b;
+      font-size: 10.5px;
+    }
+
+    .mini-badge {
+      min-width: 27px;
+      height: 16px;
+      padding: 0 5px;
+      border-radius: 4px;
+      display: grid;
+      place-items: center;
+      color: #fff;
+      font-size: 8px;
+      font-weight: 800;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    }
+
+    .legend-line {
+      width: 34px;
+      height: 1px;
+      background: #cbd5e1;
+    }
+
+    .legend-line.dashed {
+      background: repeating-linear-gradient(90deg, #94a3b8 0 5px, transparent 5px 9px);
+    }
+
+    .diagram {
+      position: relative;
+      min-width: 0;
+      min-height: 0;
+      overflow: hidden;
+      background:
+        radial-gradient(circle at 18% 12%, rgba(37, 99, 235, 0.06), transparent 26%),
+        radial-gradient(circle at 82% 78%, rgba(16, 185, 129, 0.06), transparent 28%),
+        #fbfcff;
+    }
+
+    #er {
+      width: 100%;
+      height: 100%;
+      display: block;
+      touch-action: none;
+      cursor: grab;
+      user-select: none;
+    }
+
+    #er.panning { cursor: grabbing; }
+
+    .hint {
+      position: absolute;
+      left: 18px;
+      bottom: 16px;
+      padding: 7px 10px;
+      border: 1px solid rgba(226, 232, 240, 0.9);
+      border-radius: 9px;
+      background: rgba(255, 255, 255, 0.82);
+      color: #64748b;
+      font-size: 10.5px;
+      backdrop-filter: blur(8px);
+      pointer-events: none;
+    }
+
+    .zoom-badge {
+      position: absolute;
+      right: 18px;
+      bottom: 16px;
+      min-width: 46px;
+      height: 30px;
+      padding: 0 10px;
+      border: 1px solid rgba(226, 232, 240, 0.9);
+      border-radius: 9px;
+      display: grid;
+      place-items: center;
+      background: rgba(255, 255, 255, 0.82);
+      color: #475569;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 11px;
+      font-weight: 700;
+      backdrop-filter: blur(8px);
+      pointer-events: none;
+    }
+
+    .detail-empty {
+      padding-top: 30px;
+      color: var(--muted);
+    }
+
+    .detail-empty h2 {
+      margin: 0 0 8px;
+      color: var(--ink);
+      font-size: 16px;
+    }
+
+    .detail-empty p {
+      margin: 0 0 12px;
+      font-size: 12.5px;
+      line-height: 1.7;
+    }
+
+    .detail-head {
+      padding-bottom: 14px;
+      border-bottom: 1px solid #eef2f7;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      height: 22px;
+      padding: 0 8px;
+      border-radius: 99px;
+      background: #eff6ff;
+      color: var(--accent);
+      font-size: 10.5px;
+      font-weight: 700;
+    }
+
+    .detail-head h2 {
+      margin: 10px 0 2px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 18px;
+      letter-spacing: -0.02em;
+    }
+
+    .detail-title {
+      margin: 0;
+      color: #475569;
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .detail-desc {
+      margin: 12px 0 0;
+      color: #64748b;
+      font-size: 12px;
+      line-height: 1.65;
+    }
+
+    .detail-section {
+      margin-top: 18px;
+    }
+
+    .detail-section h3 {
+      margin: 0 0 9px;
+      color: #334155;
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    .field-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 11px;
+    }
+
+    .field-table th {
+      padding: 7px 5px;
+      color: #94a3b8;
+      text-align: left;
+      font-size: 9.5px;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      border-bottom: 1px solid #eef2f7;
+    }
+
+    .field-table td {
+      padding: 7px 5px;
+      border-bottom: 1px solid #f4f7fb;
+      vertical-align: top;
+    }
+
+    .field-table .fname {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      color: #1e293b;
+      font-size: 10.5px;
+      font-weight: 700;
+      word-break: break-all;
+    }
+
+    .field-table .ftype {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      color: #64748b;
+      font-size: 9.5px;
+      white-space: nowrap;
+    }
+
+    .field-table .fnote {
+      color: #94a3b8;
+      font-size: 10px;
+      line-height: 1.4;
+    }
+
+    .badge {
+      display: inline-grid;
+      place-items: center;
+      min-width: 27px;
+      height: 16px;
+      padding: 0 5px;
+      border-radius: 4px;
+      color: #fff;
+      font-size: 8px;
+      font-weight: 800;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    }
+
+    .badge.pk { background: #d97706; }
+    .badge.fk { background: #2563eb; }
+    .badge.uq { background: #7c3aed; }
+    .badge.ix { background: #059669; }
+    .badge.pktfk { background: #d97706; }
+
+    .index-list,
+    .relation-list {
+      display: grid;
+      gap: 6px;
+    }
+
+    .index-list code {
+      padding: 7px 9px;
+      border-radius: 8px;
+      background: #f8fafc;
+      border: 1px solid #eef2f7;
+      color: #475569;
+      font-size: 9.5px;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .rel-chip {
+      width: 100%;
+      height: auto;
+      min-height: 38px;
+      padding: 7px 9px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      text-align: left;
+      background: #f8fafc;
+      border-color: #eef2f7;
+    }
+
+    .rel-chip:hover { background: #f1f7ff; border-color: #bfdbfe; }
+
+    .rel-chip .rel-name {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      color: #1e293b;
+      font-size: 10.5px;
+      font-weight: 700;
+    }
+
+    .rel-chip .rel-meta {
+      color: #64748b;
+      font-size: 9.5px;
+      white-space: nowrap;
+    }
+
+    .view-sql {
+      margin: 0;
+      padding: 11px;
+      border-radius: 10px;
+      background: #0f172a;
+      color: #dbeafe;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 10px;
+      line-height: 1.55;
+      white-space: pre-wrap;
+      overflow: auto;
+    }
+
+    .note {
+      margin-top: 14px;
+      padding: 9px 10px;
+      border-radius: 9px;
+      background: #fffbeb;
+      border: 1px solid #fde68a;
+      color: #92400e;
+      font-size: 10.5px;
+      line-height: 1.6;
+    }
+
+    .dep-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .dep-chip {
+      height: 28px;
+      padding: 0 9px;
+      border-radius: 7px;
+      border: 1px solid #dbeafe;
+      background: #eff6ff;
+      color: #1d4ed8;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 10px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    @media (max-width: 1040px) {
+      main { grid-template-columns: 220px minmax(0, 1fr); }
+      .details {
+        grid-column: 1 / -1;
+        border-left: 0;
+        border-top: 1px solid var(--line);
+        max-height: 42vh;
+      }
+      .app { grid-template-rows: auto 1fr; }
+      header { padding: 12px 14px; flex-wrap: wrap; }
+      h1 { white-space: normal; font-size: 16px; }
+      .subtitle { white-space: normal; }
+      .actions { justify-content: flex-start; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <div class="brand">
+        <div class="logo">ER</div>
+        <div>
+          <h1>家庭用电量分析 · 数据库 ER 图</h1>
+          <p class="subtitle">SQLite schema v0.1 · 拖拽表 / 滚轮缩放 / 点击查看字段与关系</p>
+        </div>
+      </div>
+      <div class="actions">
+        <label class="switch" for="toggleOptional">
+          <input id="toggleOptional" type="checkbox" checked>
+          显示辅助表
+        </label>
+        <button id="fitBtn" type="button">适应画布</button>
+        <button id="resetBtn" type="button">重置</button>
+        <button id="exportBtn" type="button">导出 SVG</button>
+      </div>
+    </header>
+
+    <main>
+      <aside class="sidebar">
+        <div class="search">
+          <input id="searchInput" type="search" placeholder="搜索表、字段..." autocomplete="off">
+        </div>
+        <div class="section-title">核心表 <span id="coreCount"></span></div>
+        <div id="coreList" class="table-list"></div>
+        <div class="section-title">辅助表 <span id="optionalCount"></span></div>
+        <div id="optionalList" class="table-list"></div>
+        <div class="section-title">派生视图 <span id="viewCount"></span></div>
+        <div id="viewList" class="table-list"></div>
+
+        <div class="legend">
+          <div class="legend-row"><span class="mini-badge" style="background:#d97706">PK</span> 主键</div>
+          <div class="legend-row"><span class="mini-badge" style="background:#2563eb">FK</span> 外键</div>
+          <div class="legend-row"><span class="mini-badge" style="background:#7c3aed">UQ</span> 唯一约束</div>
+          <div class="legend-row"><span class="mini-badge" style="background:#059669">IX</span> 索引字段</div>
+          <div class="legend-row"><span class="legend-line"></span> 实体关系</div>
+          <div class="legend-row"><span class="legend-line dashed"></span> 可选/派生关系</div>
+          <div class="legend-row">关系标签 <strong>1 : N</strong> 表示一对多</div>
+        </div>
+      </aside>
+
+      <section class="diagram" id="diagram">
+        <svg id="er" xmlns="http://www.w3.org/2000/svg" aria-label="数据库 ER 图">
+          <defs>
+            <pattern id="grid" width="26" height="26" patternUnits="userSpaceOnUse">
+              <path d="M 26 0 L 0 0 0 26" fill="none" stroke="#e8eef7" stroke-width="1"/>
+            </pattern>
+            <marker id="manyEnd" viewBox="0 0 20 20" refX="18" refY="10"
+              markerWidth="18" markerHeight="18" orient="auto" markerUnits="strokeWidth">
+              <path d="M 18 10 L 2 2 M 18 10 L 2 10 M 18 10 L 2 18"
+                fill="none" stroke="#94a3b8" stroke-width="1.4"/>
+            </marker>
+            <marker id="oneEnd" viewBox="0 0 20 20" refX="18" refY="10"
+              markerWidth="16" markerHeight="16" orient="auto" markerUnits="strokeWidth">
+              <path d="M 18 3 L 18 17 M 14 3 L 14 17"
+                fill="none" stroke="#94a3b8" stroke-width="1.4"/>
+            </marker>
+            <style>
+              .entity { cursor: grab; }
+              .entity.dragging { cursor: grabbing; }
+              .entity .entity-card {
+                fill: #ffffff;
+                stroke: #dbe3ef;
+                stroke-width: 1;
+                filter: drop-shadow(0 10px 20px rgba(15, 23, 42, 0.08));
+              }
+              .entity .entity-header { opacity: 0.56; }
+              .entity .entity-divider { stroke: #eef2f7; stroke-width: 1; }
+              .entity .entity-name {
+                fill: #0f172a;
+                font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+                font-size: 15px;
+                font-weight: 800;
+                letter-spacing: -0.02em;
+              }
+              .entity .entity-title { fill: #64748b; font-size: 10.5px; }
+              .entity .entity-group {
+                font-size: 9px;
+                font-weight: 800;
+                letter-spacing: 0.06em;
+                text-transform: uppercase;
+              }
+              .entity .field-stripe { fill: #f8fafc; }
+              .entity .field-name {
+                fill: #334155;
+                font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+                font-size: 10.5px;
+                font-weight: 600;
+              }
+              .entity .field-type {
+                fill: #94a3b8;
+                font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+                font-size: 9px;
+              }
+              .entity .key-text {
+                fill: #ffffff;
+                font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+                font-size: 7px;
+                font-weight: 800;
+              }
+              .entity.selected .entity-card { stroke: #2563eb; stroke-width: 2; }
+              .entity.active .entity-card { stroke: #93c5fd; stroke-width: 1.6; }
+              .entity.dimmed { opacity: 0.32; }
+              .edge {
+                fill: none;
+                stroke: #cbd5e1;
+                stroke-width: 1.25;
+                stroke-linejoin: round;
+              }
+              .edge.optional {
+                stroke: #b8c4d6;
+                stroke-dasharray: 5 4;
+                opacity: 0.72;
+              }
+              .edge.derived {
+                stroke: #10b981;
+                stroke-dasharray: 4 3;
+                opacity: 0.85;
+              }
+              .edge.active { stroke: #2563eb; stroke-width: 1.9; opacity: 1; }
+              .edge.active.derived { stroke: #059669; }
+              .edge.dimmed { opacity: 0.12; }
+              .edge-label {
+                fill: #64748b;
+                font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+                font-size: 9px;
+                font-weight: 700;
+                paint-order: stroke;
+                stroke: #fbfcff;
+                stroke-width: 4;
+                stroke-linejoin: round;
+              }
+              .edge-label.active { fill: #1d4ed8; }
+              .edge-label.dimmed { opacity: 0.2; }
+            </style>
+          </defs>
+
+          <rect id="bg" x="-6000" y="-6000" width="12000" height="12000" fill="url(#grid)"/>
+          <g id="viewport">
+            <g id="edges"></g>
+            <g id="nodes"></g>
+          </g>
+        </svg>
+        <div class="hint">拖拽表移动 · 拖拽空白平移 · 滚轮缩放 · 点击查看详情</div>
+        <div class="zoom-badge" id="zoomBadge">100%</div>
+      </section>
+
+      <aside class="details" id="details"></aside>
+    </main>
+  </div>
+
+  <script>
+    const GROUPS = {
+      auth:    { label: "权限", color: "#7c3aed", soft: "#f3e8ff" },
+      core:    { label: "核心维度", color: "#2563eb", soft: "#dbeafe" },
+      fact:    { label: "事实表", color: "#d97706", soft: "#fef3c7" },
+      derived: { label: "派生", color: "#059669", soft: "#d1fae5" },
+      support: { label: "导入审计", color: "#64748b", soft: "#e2e8f0" },
+      model:   { label: "模型", color: "#db2777", soft: "#fce7f3" },
+      view:    { label: "视图", color: "#0d9488", soft: "#ccfbf1" }
+    };
+
+    const TABLES = [
+      {
+        id: "users",
+        name: "users",
+        title: "用户账户",
+        group: "auth",
+        x: 40, y: 40, w: 250,
+        desc: "登录账户、密码哈希与角色控制。user 通过 households.owner_user_id 拥有多个家庭，admin 可访问全部家庭。",
+        fields: [
+          { name: "id", type: "INTEGER", key: "PK", note: "自增主键" },
+          { name: "username", type: "TEXT", key: "UQ", note: "登录名，唯一" },
+          { name: "password_hash", type: "TEXT", note: "密码哈希，不存明文" },
+          { name: "role", type: "TEXT", note: "'user' | 'admin'" },
+          { name: "display_name", type: "TEXT", note: "显示名称" },
+          { name: "is_active", type: "INTEGER", note: "0/1，禁用后不可登录" },
+          { name: "created_at", type: "TEXT", note: "创建时间" }
+        ],
+        indexes: [
+          "PRIMARY KEY (id)",
+          "UNIQUE (username)"
+        ]
+      },
+      {
+        id: "households",
+        name: "households",
+        title: "家庭",
+        group: "core",
+        x: 40, y: 380, w: 250,
+        desc: "家庭的稳定属性。Home ID 直接作为主键；owner_user_id 表示唯一所属用户，一个用户可拥有多个家庭。",
+        fields: [
+          { name: "id", type: "INTEGER", key: "PK", note: "CSV Home ID，1–500" },
+          { name: "owner_user_id", type: "INTEGER", key: "FK", note: "所属用户，可空待分配" },
+          { name: "display_name", type: "TEXT", note: "展示名，例如 Home 94" },
+          { name: "city", type: "TEXT", note: "默认 Chengdu" },
+          { name: "created_at", type: "TEXT", note: "创建时间" }
+        ],
+        indexes: [
+          "PRIMARY KEY (id)",
+          "INDEX (owner_user_id)"
+        ]
+      },
+      {
+        id: "appliances",
+        name: "appliances",
+        title: "电器类型",
+        group: "core",
+        x: 40, y: 720, w: 250,
+        desc: "电器维度表，避免在事实表里重复存储字符串，并支持按电器筛选。",
+        fields: [
+          { name: "id", type: "INTEGER", key: "PK", note: "自增主键" },
+          { name: "name", type: "TEXT", key: "UQ", note: "Fridge、Oven 等 10 类" },
+          { name: "created_at", type: "TEXT", note: "创建时间" }
+        ],
+        indexes: [
+          "PRIMARY KEY (id)",
+          "UNIQUE (name)"
+        ]
+      },
+      {
+        id: "energy_readings",
+        name: "energy_readings",
+        title: "用电读数事实表",
+        group: "fact",
+        x: 760, y: 40, w: 290,
+        desc: "一行代表某户、某电器、某日期某时刻的一次读数。所有日/月/年聚合、筛选和预测都从这张表出发。",
+        fields: [
+          { name: "id", type: "INTEGER", key: "PK", note: "自增主键" },
+          { name: "household_id", type: "INTEGER", key: "FK", note: "关联 households.id" },
+          { name: "appliance_id", type: "INTEGER", key: "FK", note: "关联 appliances.id" },
+          { name: "reading_date", type: "TEXT", key: "IX", note: "YYYY-MM-DD" },
+          { name: "reading_time", type: "TEXT", note: "HH:MM" },
+          { name: "energy_kwh", type: "REAL", note: "用电量，>=0" },
+          { name: "outdoor_temp_c", type: "REAL", note: "室外温度" },
+          { name: "season", type: "TEXT", note: "Winter/Spring/Summer/Fall" },
+          { name: "household_size", type: "INTEGER", note: "读数时报告人数" },
+          { name: "quality_flag", type: "TEXT", key: "IX", note: "ok / 异常 / 重复" },
+          { name: "import_batch_id", type: "INTEGER", key: "FK", note: "导入批次，可空" },
+          { name: "created_at", type: "TEXT", note: "入库时间" }
+        ],
+        indexes: [
+          "UNIQUE (household_id, appliance_id, reading_date, reading_time)",
+          "INDEX (household_id, reading_date)",
+          "INDEX (reading_date, appliance_id)",
+          "INDEX (quality_flag, reading_date)"
+        ]
+      },
+      {
+        id: "household_profiles",
+        name: "household_profiles",
+        title: "家庭画像（派生）",
+        group: "derived",
+        x: 760, y: 520, w: 290,
+        desc: "从读数聚合出的家庭画像。用于家庭列表展示、人数代表值和人均用电报告。",
+        fields: [
+          { name: "household_id", type: "INTEGER", key: "PK/FK", note: "关联 households.id" },
+          { name: "size_median", type: "REAL", note: "家庭人数中位数" },
+          { name: "size_mode", type: "INTEGER", note: "家庭人数众数" },
+          { name: "avg_temp_c", type: "REAL", note: "平均室外温度" },
+          { name: "avg_daily_kwh", type: "REAL", note: "平均日用电" },
+          { name: "reading_count", type: "INTEGER", note: "读数条数" },
+          { name: "first_date", type: "TEXT", note: "最早读数日期" },
+          { name: "last_date", type: "TEXT", note: "最晚读数日期" },
+          { name: "updated_at", type: "TEXT", note: "更新时间" }
+        ],
+        indexes: [
+          "PRIMARY KEY (household_id)"
+        ]
+      },
+      {
+        id: "import_batches",
+        name: "import_batches",
+        title: "CSV 导入批次",
+        group: "support",
+        optional: true,
+        x: 1100, y: 40, w: 260,
+        desc: "记录每次 CSV 导入的文件、行数、去重数量和质量标记数量，便于追溯。",
+        fields: [
+          { name: "id", type: "INTEGER", key: "PK", note: "自增主键" },
+          { name: "filename", type: "TEXT", note: "源文件名" },
+          { name: "file_hash", type: "TEXT", note: "文件哈希" },
+          { name: "imported_at", type: "TEXT", note: "导入时间" },
+          { name: "total_rows", type: "INTEGER", note: "总行数" },
+          { name: "inserted_rows", type: "INTEGER", note: "成功入库数" },
+          { name: "rejected_rows", type: "INTEGER", note: "拒绝行数" },
+          { name: "duplicate_rows", type: "INTEGER", note: "重复行数" },
+          { name: "quality_flagged_rows", type: "INTEGER", note: "质量标记行数" },
+          { name: "status", type: "TEXT", note: "running/completed/failed" },
+          { name: "error_message", type: "TEXT", note: "失败原因，可空" }
+        ],
+        indexes: [
+          "PRIMARY KEY (id)"
+        ]
+      },
+      {
+        id: "import_errors",
+        name: "import_errors",
+        title: "导入错误明细",
+        group: "support",
+        optional: true,
+        x: 1100, y: 500, w: 260,
+        desc: "逐行记录导入失败或去重原因，便于在 SVVP 中说明数据清洗过程。",
+        fields: [
+          { name: "id", type: "INTEGER", key: "PK", note: "自增主键" },
+          { name: "import_batch_id", type: "INTEGER", key: "FK", note: "关联 import_batches.id" },
+          { name: "row_number", type: "INTEGER", note: "CSV 行号" },
+          { name: "error_code", type: "TEXT", note: "错误码" },
+          { name: "message", type: "TEXT", note: "错误描述" },
+          { name: "raw_data", type: "TEXT", note: "原始行内容" },
+          { name: "created_at", type: "TEXT", note: "创建时间" }
+        ],
+        indexes: [
+          "INDEX (import_batch_id, row_number)"
+        ]
+      },
+      {
+        id: "model_versions",
+        name: "model_versions",
+        title: "预训练模型登记",
+        group: "model",
+        optional: true,
+        x: 1440, y: 40, w: 260,
+        desc: "登记外部训练产出的模型版本、离线评估指标和模型文件位置。服务启动后只加载模型执行推理，不在应用内训练。",
+        fields: [
+          { name: "id", type: "INTEGER", key: "PK", note: "自增主键" },
+          { name: "version", type: "TEXT", key: "UQ", note: "模型版本，唯一" },
+          { name: "trained_at", type: "TEXT", note: "外部训练完成时间" },
+          { name: "train_start", type: "TEXT", note: "离线训练数据起始" },
+          { name: "train_end", type: "TEXT", note: "离线训练数据结束" },
+          { name: "mae", type: "REAL", note: "平均绝对误差" },
+          { name: "rmse", type: "REAL", note: "均方根误差" },
+          { name: "r2", type: "REAL", note: "决定系数" },
+          { name: "feature_set", type: "TEXT", note: "特征集合 JSON" },
+          { name: "artifact_path", type: "TEXT", note: "预训练模型文件路径" }
+        ],
+        indexes: [
+          "PRIMARY KEY (id)",
+          "UNIQUE (version)"
+        ]
+      },
+      {
+        id: "predictions",
+        name: "predictions",
+        title: "月度推理记录",
+        group: "model",
+        optional: true,
+        x: 1440, y: 450, w: 260,
+        desc: "保存单户月维度推理的输入、输出和模型版本。请求提供房屋、目标月份和居住人口，输出为该月平均日用电量。",
+        fields: [
+          { name: "id", type: "INTEGER", key: "PK", note: "自增主键" },
+          { name: "model_version_id", type: "INTEGER", key: "FK", note: "关联 model_versions.id" },
+          { name: "household_id", type: "INTEGER", key: "FK", note: "关联 households.id" },
+          { name: "appliance_id", type: "INTEGER", key: "FK", note: "可空，预留按电器预测" },
+          { name: "created_by_user_id", type: "INTEGER", key: "FK", note: "可空，请求用户" },
+          { name: "target_month", type: "INTEGER", note: "目标月份，1–12" },
+          { name: "input_household_size", type: "INTEGER", note: "输入居住人口" },
+          { name: "predicted_avg_daily_kwh", type: "REAL", note: "预测平均日用电" },
+          { name: "created_at", type: "TEXT", note: "创建时间" }
+        ],
+        indexes: [
+          "INDEX (household_id, target_month)"
+        ]
+      }
+    ];
+
+    const RELATIONS = [
+      { from: "users", to: "households", fromCard: "1", toCard: "N", label: "owner_user_id" },
+      { from: "households", to: "energy_readings", fromCard: "1", toCard: "N", label: "household_id" },
+      { from: "appliances", to: "energy_readings", fromCard: "1", toCard: "N", label: "appliance_id" },
+      { from: "households", to: "household_profiles", fromCard: "1", toCard: "1", label: "household_id" },
+      { from: "energy_readings", to: "household_profiles", fromCard: "N", toCard: "1", label: "aggregates", kind: "derived" },
+      { from: "import_batches", to: "energy_readings", fromCard: "1", toCard: "N", label: "import_batch_id", optional: true },
+      { from: "import_batches", to: "import_errors", fromCard: "1", toCard: "N", label: "import_batch_id", optional: true },
+      { from: "model_versions", to: "predictions", fromCard: "1", toCard: "N", label: "model_version_id", optional: true },
+      {
+        from: "households", to: "predictions",
+        fromCard: "1", toCard: "N", label: "household_id", optional: true,
+        via: [{ x: 320, y: 469 }, { x: 320, y: 1030 }, { x: 1570, y: 1030 }]
+      },
+      {
+        from: "appliances", to: "predictions",
+        fromCard: "1", toCard: "N", label: "appliance_id", optional: true,
+        via: [{ x: 320, y: 796 }, { x: 320, y: 1100 }, { x: 1735, y: 1100 }, { x: 1735, y: 636 }]
+      },
+      {
+        from: "users", to: "predictions",
+        fromCard: "1", toCard: "N", label: "created_by_user_id", optional: true,
+        via: [{ x: 330, y: 166 }, { x: 330, y: 8 }, { x: 1735, y: 8 }, { x: 1735, y: 636 }]
+      }
+    ];
+
+    const VIEWS = [
+      {
+        id: "training_readings",
+        name: "training_readings",
+        title: "离线训练数据视图",
+        depends: ["energy_readings"],
+        desc: "只保留 quality_flag = 'ok' 的读数，供离线训练/评估取数；服务运行时推理不读取这个视图。",
+        sql: "CREATE VIEW training_readings AS\nSELECT *\nFROM energy_readings\nWHERE quality_flag = 'ok';"
+      },
+      {
+        id: "daily_household_consumption",
+        name: "daily_household_consumption",
+        title: "家庭日用电视图",
+        depends: ["energy_readings"],
+        desc: "按家庭和日期汇总总用电与读数条数。API 的单户日视图和多户对比可以直接基于这个视图。",
+        sql: "CREATE VIEW daily_household_consumption AS\nSELECT household_id,\n       reading_date,\n       SUM(energy_kwh) AS total_kwh,\n       COUNT(*)        AS reading_count\nFROM energy_readings\nGROUP BY household_id, reading_date;"
+      },
+      {
+        id: "user_accessible_households",
+        name: "user_accessible_households",
+        title: "用户可访问家庭视图",
+        depends: ["users", "households"],
+        desc: "只返回启用用户拥有的家庭。每个家庭通过 households.owner_user_id 唯一归属一个用户。",
+        sql: "CREATE VIEW user_accessible_households AS\nSELECT h.owner_user_id AS user_id,\n       h.id           AS household_id\nFROM households h\nJOIN users u ON u.id = h.owner_user_id\nWHERE u.is_active = 1;"
+      }
+    ];
+
+    const OPTIONAL_IDS = new Set(
+      TABLES.filter(function (t) { return t.optional; }).map(function (t) { return t.id; })
+    );
+
+    const HEADER_H = 64;
+    const ROW_H = 25;
+    const PAD_B = 12;
+
+    const state = {
+      selected: null,
+      hovered: null,
+      viewSelected: null,
+      optionalVisible: true,
+      search: "",
+      zoom: 0.86,
+      panX: 24,
+      panY: 24,
+      drag: null,
+      panning: null
+    };
+
+    const svg = document.getElementById("er");
+    const bg = document.getElementById("bg");
+    const viewport = document.getElementById("viewport");
+    const edgesLayer = document.getElementById("edges");
+    const nodesLayer = document.getElementById("nodes");
+    const details = document.getElementById("details");
+    const sidebar = document.querySelector(".sidebar");
+    const coreList = document.getElementById("coreList");
+    const optionalList = document.getElementById("optionalList");
+    const viewList = document.getElementById("viewList");
+    const coreCount = document.getElementById("coreCount");
+    const optionalCount = document.getElementById("optionalCount");
+    const viewCount = document.getElementById("viewCount");
+    const searchInput = document.getElementById("searchInput");
+    const toggleOptional = document.getElementById("toggleOptional");
+    const fitBtn = document.getElementById("fitBtn");
+    const resetBtn = document.getElementById("resetBtn");
+    const exportBtn = document.getElementById("exportBtn");
+    const zoomBadge = document.getElementById("zoomBadge");
+
+    function tableById(id) {
+      return TABLES.find(function (t) { return t.id === id; });
+    }
+
+    function nodeHeight(t) {
+      return HEADER_H + t.fields.length * ROW_H + PAD_B;
+    }
+
+    function keyColor(key) {
+      if (key === "PK") return "#d97706";
+      if (key === "FK") return "#2563eb";
+      if (key === "UQ") return "#7c3aed";
+      if (key === "IX") return "#059669";
+      if (key === "PK/FK") return "#d97706";
+      return "#64748b";
+    }
+
+    function keyClass(key) {
+      if (key === "PK") return "pk";
+      if (key === "FK") return "fk";
+      if (key === "UQ") return "uq";
+      if (key === "IX") return "ix";
+      if (key === "PK/FK") return "pktfk";
+      return "";
+    }
+
+    function renderNodes() {
+      nodesLayer.innerHTML = TABLES.map(function (t) {
+        const group = GROUPS[t.group];
+        const h = nodeHeight(t);
+        const fields = t.fields.map(function (f, i) {
+          const y = HEADER_H + i * ROW_H + 18;
+          const stripe = i % 2 === 0 ? "" :
+            '<rect class="field-stripe" x="8" y="' + (y - 14) + '" width="' + (t.w - 16) + '" height="23" rx="4"/>';
+          const badge = f.key
+            ? '<rect x="12" y="' + (y - 11) + '" width="30" height="15" rx="4" fill="' + keyColor(f.key) + '"/>' +
+              '<text class="key-text" x="27" y="' + y + '" text-anchor="middle">' + f.key + '</text>'
+            : "";
+          const nameX = f.key ? 50 : 16;
+          return '<g class="field">' + stripe + badge +
+            '<text class="field-name" x="' + nameX + '" y="' + y + '">' + f.name + '</text>' +
+            '<text class="field-type" x="' + (t.w - 12) + '" y="' + y + '" text-anchor="end">' + f.type + '</text>' +
+            '</g>';
+        }).join("");
+
+        return '<g class="entity group-' + t.group + '" data-id="' + t.id + '" transform="translate(' + t.x + ',' + t.y + ')">' +
+          '<rect class="entity-card" x="0" y="0" width="' + t.w + '" height="' + h + '" rx="12"/>' +
+          '<rect class="entity-header" x="0" y="0" width="' + t.w + '" height="64" rx="12" fill="' + group.soft + '"/>' +
+          '<rect x="0" y="0" width="' + t.w + '" height="5" rx="3" fill="' + group.color + '"/>' +
+          '<text class="entity-name" x="16" y="31">' + t.name + '</text>' +
+          '<text class="entity-title" x="16" y="49">' + t.title + '</text>' +
+          '<text class="entity-group" x="' + (t.w - 14) + '" y="31" text-anchor="end" fill="' + group.color + '">' + group.label + '</text>' +
+          '<line class="entity-divider" x1="0" y1="64" x2="' + t.w + '" y2="64"/>' +
+          fields +
+          '</g>';
+      }).join("");
+
+      nodesLayer.querySelectorAll(".entity").forEach(function (el) {
+        el.addEventListener("pointerdown", onNodePointerDown);
+        el.addEventListener("pointerenter", onNodeEnter);
+        el.addEventListener("pointerleave", onNodeLeave);
+      });
+    }
+
+    function rectPoint(t, tx, ty) {
+      const cx = t.x + t.w / 2;
+      const cy = t.y + nodeHeight(t) / 2;
+      const dx = tx - cx;
+      const dy = ty - cy;
+      if (dx === 0 && dy === 0) return { x: cx, y: cy };
+      const sx = dx === 0 ? Infinity : (t.w / 2 - 4) / Math.abs(dx);
+      const sy = dy === 0 ? Infinity : (nodeHeight(t) / 2 - 4) / Math.abs(dy);
+      const s = Math.min(sx, sy);
+      return { x: cx + dx * s, y: cy + dy * s };
+    }
+
+    function centerOf(t) {
+      return { x: t.x + t.w / 2, y: t.y + nodeHeight(t) / 2 };
+    }
+
+    function curvedPath(a, b) {
+      const dx = b.x - a.x;
+      const dy = b.y - a.y;
+      if (Math.abs(dx) >= Math.abs(dy)) {
+        return "M " + a.x + " " + a.y +
+          " C " + (a.x + dx * 0.45) + " " + a.y +
+          ", " + (b.x - dx * 0.45) + " " + b.y +
+          ", " + b.x + " " + b.y;
+      }
+      return "M " + a.x + " " + a.y +
+        " C " + a.x + " " + (a.y + dy * 0.45) +
+        ", " + b.x + " " + (b.y - dy * 0.45) +
+        ", " + b.x + " " + b.y;
+    }
+
+    function polylineMidpoint(points) {
+      let total = 0;
+      const lengths = [];
+      for (let i = 1; i < points.length; i++) {
+        const len = Math.hypot(points[i].x - points[i - 1].x, points[i].y - points[i - 1].y);
+        lengths.push(len);
+        total += len;
+      }
+      let target = total / 2;
+      for (let i = 0; i < lengths.length; i++) {
+        if (target <= lengths[i]) {
+          const t = lengths[i] === 0 ? 0 : target / lengths[i];
+          return {
+            x: points[i].x + (points[i + 1].x - points[i].x) * t,
+            y: points[i].y + (points[i + 1].y - points[i].y) * t
+          };
+        }
+        target -= lengths[i];
+      }
+      return points[points.length - 1];
+    }
+
+    function renderEdges() {
+      edgesLayer.innerHTML = RELATIONS.map(function (r, index) {
+        const from = tableById(r.from);
+        const to = tableById(r.to);
+        if (!from || !to) return "";
+
+        let start;
+        let end;
+        let d;
+        let mid;
+
+        if (r.via && r.via.length) {
+          start = rectPoint(from, r.via[0].x, r.via[0].y);
+          const last = r.via[r.via.length - 1];
+          end = rectPoint(to, last.x, last.y);
+          const pts = [start].concat(r.via, [end]);
+          d = "M " + pts.map(function (p) { return p.x + " " + p.y; }).join(" L ");
+          mid = polylineMidpoint(pts);
+        } else {
+          const fc = centerOf(from);
+          const tc = centerOf(to);
+          start = rectPoint(from, tc.x, tc.y);
+          end = rectPoint(to, fc.x, fc.y);
+          d = curvedPath(start, end);
+          mid = { x: (start.x + end.x) / 2, y: (start.y + end.y) / 2 };
+        }
+
+        const classes = ["edge"];
+        if (r.optional || OPTIONAL_IDS.has(r.from) || OPTIONAL_IDS.has(r.to)) classes.push("optional");
+        if (r.kind === "derived") classes.push("derived");
+        if (OPTIONAL_IDS.has(r.from) || OPTIONAL_IDS.has(r.to)) classes.push("optional-table-edge");
+
+        const marker = r.toCard === "N" ? "url(#manyEnd)" : "url(#oneEnd)";
+        const label = r.fromCard + " : " + r.toCard;
+
+        return '<g class="relation" data-from="' + r.from + '" data-to="' + r.to + '" data-index="' + index + '">' +
+          '<path class="' + classes.join(" ") + '" d="' + d + '" marker-end="' + marker + '"/>' +
+          '<text class="edge-label" x="' + mid.x + '" y="' + (mid.y - 6) + '" text-anchor="middle">' + label + '</text>' +
+          '</g>';
+      }).join("");
+    }
+
+    function relatedTables(id) {
+      const set = new Set([id]);
+      RELATIONS.forEach(function (r) {
+        if (r.from === id) set.add(r.to);
+        if (r.to === id) set.add(r.from);
+      });
+      return set;
+    }
+
+    function applyHighlight() {
+      let targets = null;
+      let mode = "selection";
+
+      if (state.hovered) {
+        targets = relatedTables(state.hovered);
+        mode = "hover";
+      } else if (state.selected) {
+        targets = relatedTables(state.selected);
+        mode = "selection";
+      } else if (state.viewSelected) {
+        const view = VIEWS.find(function (v) { return v.id === state.viewSelected; });
+        targets = new Set(view ? view.depends : []);
+        mode = "view";
+      }
+
+      nodesLayer.querySelectorAll(".entity").forEach(function (el) {
+        const id = el.dataset.id;
+        el.classList.remove("dimmed", "active", "selected");
+        if (!targets) return;
+        if (targets.has(id)) {
+          el.classList.add("active");
+        } else {
+          el.classList.add("dimmed");
+        }
+      });
+
+      if (state.selected) {
+        const selectedEl = nodesLayer.querySelector('.entity[data-id="' + state.selected + '"]');
+        if (selectedEl) {
+          selectedEl.classList.remove("dimmed");
+          selectedEl.classList.add("selected");
+        }
+      }
+
+      edgesLayer.querySelectorAll(".relation").forEach(function (el) {
+        const from = el.dataset.from;
+        const to = el.dataset.to;
+        const path = el.querySelector(".edge");
+        const label = el.querySelector(".edge-label");
+        path.classList.remove("active", "dimmed");
+        label.classList.remove("active", "dimmed");
+
+        if (!targets) return;
+
+        let active = false;
+        if (mode === "view") {
+          active = targets.has(from) && targets.has(to);
+        } else {
+          active = targets.has(from) && targets.has(to) &&
+            (state.selected || state.hovered);
+        }
+
+        if (active) {
+          path.classList.add("active");
+          label.classList.add("active");
+        } else {
+          path.classList.add("dimmed");
+          label.classList.add("dimmed");
+        }
+      });
+    }
+
+    function renderDetailsEmpty() {
+      details.innerHTML = '<div class="detail-empty">' +
+        '<h2>开始探索数据库</h2>' +
+        '<p>点击任意表查看字段、约束、索引和关系；拖拽表可以调整布局，滚轮可以缩放。</p>' +
+        '<p>右侧会显示当前表或派生视图的详细说明。辅助表包括 CSV 导入审计、预训练模型登记和推理记录，可通过顶部开关隐藏。</p>' +
+        '<div class="note">数据设计要点：household_profiles 是可由 energy_readings 重建的物化派生表；家庭人数在原始数据中逐行变化，所以读数保留人数，画像只存代表值。</div>' +
+        '</div>';
+    }
+
+    function renderDetailsTable(id) {
+      const t = tableById(id);
+      if (!t) return renderDetailsEmpty();
+      const group = GROUPS[t.group];
+
+      const rows = t.fields.map(function (f) {
+        return '<tr>' +
+          '<td>' + (f.key ? '<span class="badge ' + keyClass(f.key) + '">' + f.key + '</span>' : "") + '</td>' +
+          '<td class="fname">' + f.name + '</td>' +
+          '<td class="ftype">' + f.type + '</td>' +
+          '<td class="fnote">' + (f.note || "") + '</td>' +
+          '</tr>';
+      }).join("");
+
+      const indexes = t.indexes.map(function (item) {
+        return '<code>' + item + '</code>';
+      }).join("");
+
+      const rels = RELATIONS.filter(function (r) {
+        return r.from === id || r.to === id;
+      }).map(function (r) {
+        const other = r.from === id ? r.to : r.from;
+        const direction = r.from === id ? "→" : "←";
+        return '<button class="rel-chip" type="button" data-goto="' + other + '">' +
+          '<span class="rel-name">' + direction + ' ' + other + '</span>' +
+          '<span class="rel-meta">' + r.label + ' · ' + r.fromCard + ":" + r.toCard + '</span>' +
+          '</button>';
+      }).join("");
+
+      const extra = id === "energy_readings"
+        ? '<div class="note">quality_flag 让原始数据保留，同时让离线训练只使用 training_readings 视图。<br>household_size 不做家庭级唯一约束，因为同户在原始数据中出现 1–5 多个值。</div>'
+        : id === "households"
+          ? '<div class="note">owner_user_id 是单值外键：一个用户可拥有多户，但每个家庭只能归属一个用户。<br>人数、平均温度和平均日用电放在 household_profiles。</div>'
+          : "";
+
+      details.innerHTML =
+        '<div class="detail-head">' +
+          '<span class="pill" style="background:' + group.soft + ';color:' + group.color + '">' + group.label + '</span>' +
+          '<h2>' + t.name + '</h2>' +
+          '<p class="detail-title">' + t.title + '</p>' +
+          '<p class="detail-desc">' + t.desc + '</p>' +
+        '</div>' +
+        '<div class="detail-section">' +
+          '<h3>字段 · ' + t.fields.length + '</h3>' +
+          '<table class="field-table"><thead><tr><th></th><th>字段</th><th>类型</th><th>说明</th></tr></thead><tbody>' + rows + '</tbody></table>' +
+        '</div>' +
+        '<div class="detail-section">' +
+          '<h3>索引 / 约束</h3>' +
+          '<div class="index-list">' + indexes + '</div>' +
+        '</div>' +
+        '<div class="detail-section">' +
+          '<h3>关系</h3>' +
+          '<div class="relation-list">' + (rels || '<div class="empty-list">暂无关系</div>') + '</div>' +
+        '</div>' +
+        extra;
+    }
+
+    function renderDetailsView(id) {
+      const v = VIEWS.find(function (x) { return x.id === id; });
+      if (!v) return renderDetailsEmpty();
+      const group = GROUPS.view;
+      const deps = v.depends.map(function (dep) {
+        return '<button class="dep-chip" type="button" data-goto="' + dep + '">' + dep + '</button>';
+      }).join("");
+
+      details.innerHTML =
+        '<div class="detail-head">' +
+          '<span class="pill" style="background:' + group.soft + ';color:' + group.color + '">' + group.label + '</span>' +
+          '<h2>' + v.name + '</h2>' +
+          '<p class="detail-title">' + v.title + '</p>' +
+          '<p class="detail-desc">' + v.desc + '</p>' +
+        '</div>' +
+        '<div class="detail-section">' +
+          '<h3>依赖表</h3>' +
+          '<div class="dep-chips">' + deps + '</div>' +
+        '</div>' +
+        '<div class="detail-section">' +
+          '<h3>定义</h3>' +
+          '<pre class="view-sql">' + v.sql + '</pre>' +
+        '</div>' +
+        '<div class="note">视图不存储数据，只是查询别名；修改底层表后视图结果会自动变化。</div>';
+    }
+
+    function selectTable(id, center) {
+      state.selected = id;
+      state.viewSelected = null;
+      state.hovered = null;
+      renderDetailsTable(id);
+      renderSidebar();
+      applyHighlight();
+      if (center) centerOnTable(id);
+    }
+
+    function selectView(id) {
+      state.selected = null;
+      state.viewSelected = id;
+      state.hovered = null;
+      renderDetailsView(id);
+      renderSidebar();
+      applyHighlight();
+    }
+
+    function clearSelection() {
+      state.selected = null;
+      state.viewSelected = null;
+      state.hovered = null;
+      renderDetailsEmpty();
+      renderSidebar();
+      applyHighlight();
+    }
+
+    function matchesSearch(text) {
+      if (!state.search) return true;
+      return text.toLowerCase().indexOf(state.search.toLowerCase()) !== -1;
+    }
+
+    function tableSearchText(t) {
+      return [t.name, t.title, t.desc].concat(t.fields.map(function (f) { return f.name + " " + f.type + " " + (f.note || ""); })).join(" ");
+    }
+
+    function tableButton(t) {
+      const group = GROUPS[t.group];
+      const selected = state.selected === t.id ? " selected" : "";
+      const muted = t.optional && !state.optionalVisible ? " muted" : "";
+      return '<button class="table-btn' + selected + muted + '" type="button" data-table="' + t.id + '">' +
+        '<span class="dot" style="background:' + group.color + '"></span>' +
+        '<span class="btn-main"><span class="btn-name">' + t.name + '</span><span class="btn-title">' + t.title + '</span></span>' +
+        '<span class="btn-count">' + t.fields.length + '</span>' +
+        '</button>';
+    }
+
+    function viewButton(v) {
+      const group = GROUPS.view;
+      return '<button class="table-btn" type="button" data-view="' + v.id + '">' +
+        '<span class="dot" style="background:' + group.color + '"></span>' +
+        '<span class="btn-main"><span class="btn-name">' + v.name + '</span><span class="btn-title">' + v.title + '</span></span>' +
+        '<span class="btn-count">V</span>' +
+        '</button>';
+    }
+
+    function renderSidebar() {
+      const core = TABLES.filter(function (t) { return !t.optional; });
+      const optional = TABLES.filter(function (t) { return t.optional; });
+      const coreFiltered = core.filter(function (t) { return matchesSearch(tableSearchText(t)); });
+      const optionalFiltered = optional.filter(function (t) { return matchesSearch(tableSearchText(t)); });
+      const viewsFiltered = VIEWS.filter(function (v) {
+        return matchesSearch(v.name + " " + v.title + " " + v.desc);
+      });
+
+      coreCount.textContent = core.length;
+      optionalCount.textContent = optional.length;
+      viewCount.textContent = VIEWS.length;
+
+      coreList.innerHTML = coreFiltered.length
+        ? coreFiltered.map(tableButton).join("")
+        : '<div class="empty-list">没有匹配的表</div>';
+
+      optionalList.innerHTML = optionalFiltered.length
+        ? optionalFiltered.map(tableButton).join("")
+        : '<div class="empty-list">没有匹配的表</div>';
+      optionalList.style.display = state.optionalVisible ? "grid" : "none";
+
+      viewList.innerHTML = viewsFiltered.length
+        ? viewsFiltered.map(viewButton).join("")
+        : '<div class="empty-list">没有匹配的视图</div>';
+    }
+
+    function applyViewport() {
+      viewport.setAttribute("transform", "translate(" + state.panX + " " + state.panY + ") scale(" + state.zoom + ")");
+      zoomBadge.textContent = Math.round(state.zoom * 100) + "%";
+    }
+
+    function visibleBBox() {
+      const visible = TABLES.filter(function (t) {
+        return state.optionalVisible || !OPTIONAL_IDS.has(t.id);
+      });
+      const minX = Math.min.apply(null, visible.map(function (t) { return t.x; }));
+      const minY = Math.min.apply(null, visible.map(function (t) { return t.y; }));
+      const maxX = Math.max.apply(null, visible.map(function (t) { return t.x + t.w; }));
+      const maxY = Math.max.apply(null, visible.map(function (t) { return t.y + nodeHeight(t); }));
+      return { x: minX, y: minY, w: maxX - minX, h: maxY - minY };
+    }
+
+    function fitView() {
+      const bbox = visibleBBox();
+      const vw = svg.clientWidth || 900;
+      const vh = svg.clientHeight || 600;
+      const pad = 78;
+      const scale = Math.min((vw - pad * 2) / bbox.w, (vh - pad * 2) / bbox.h, 1.25);
+      state.zoom = Math.max(0.38, scale);
+      state.panX = (vw - bbox.w * state.zoom) / 2 - bbox.x * state.zoom;
+      state.panY = (vh - bbox.h * state.zoom) / 2 - bbox.y * state.zoom;
+      applyViewport();
+    }
+
+    function centerOnTable(id) {
+      const t = tableById(id);
+      if (!t) return;
+      if (state.zoom < 0.75) state.zoom = 0.95;
+      const vw = svg.clientWidth || 900;
+      const vh = svg.clientHeight || 600;
+      state.panX = vw / 2 - (t.x + t.w / 2) * state.zoom;
+      state.panY = vh / 2 - (t.y + nodeHeight(t) / 2) * state.zoom;
+      applyViewport();
+    }
+
+    function updateVisibility() {
+      nodesLayer.querySelectorAll(".entity").forEach(function (el) {
+        if (OPTIONAL_IDS.has(el.dataset.id) && !state.optionalVisible) {
+          el.style.display = "none";
+        } else {
+          el.style.display = "";
+        }
+      });
+      edgesLayer.querySelectorAll(".relation").forEach(function (el) {
+        const optionalEdge = OPTIONAL_IDS.has(el.dataset.from) || OPTIONAL_IDS.has(el.dataset.to);
+        if (optionalEdge && !state.optionalVisible) {
+          el.style.display = "none";
+        } else {
+          el.style.display = "";
+        }
+      });
+    }
+
+    function screenToWorld(clientX, clientY) {
+      const pt = svg.createSVGPoint();
+      pt.x = clientX;
+      pt.y = clientY;
+      const ctm = viewport.getScreenCTM();
+      return pt.matrixTransform(ctm.inverse());
+    }
+
+    function onNodePointerDown(event) {
+      if (event.button !== 0) return;
+      event.preventDefault();
+      event.stopPropagation();
+      const entity = event.currentTarget;
+      const id = entity.dataset.id;
+      const t = tableById(id);
+      if (!t) return;
+      const world = screenToWorld(event.clientX, event.clientY);
+      state.drag = {
+        id: id,
+        startX: world.x,
+        startY: world.y,
+        origX: t.x,
+        origY: t.y,
+        moved: false
+      };
+      entity.classList.add("dragging");
+      svg.setPointerCapture(event.pointerId);
+    }
+
+    function onNodeEnter(event) {
+      const id = event.currentTarget.dataset.id;
+      if (state.drag) return;
+      state.hovered = id;
+      applyHighlight();
+    }
+
+    function onNodeLeave(event) {
+      if (state.drag) return;
+      if (state.hovered === event.currentTarget.dataset.id) {
+        state.hovered = null;
+        applyHighlight();
+      }
+    }
+
+    function onPointerMove(event) {
+      if (state.drag) {
+        const t = tableById(state.drag.id);
+        if (!t) return;
+        const world = screenToWorld(event.clientX, event.clientY);
+        const dx = world.x - state.drag.startX;
+        const dy = world.y - state.drag.startY;
+        if (Math.abs(dx) > 3 || Math.abs(dy) > 3) state.drag.moved = true;
+        t.x = state.drag.origX + dx;
+        t.y = state.drag.origY + dy;
+        const entity = nodesLayer.querySelector('.entity[data-id="' + t.id + '"]');
+        if (entity) entity.setAttribute("transform", "translate(" + t.x + "," + t.y + ")");
+        renderEdges();
+        updateVisibility();
+        applyHighlight();
+        return;
+      }
+
+      if (state.panning) {
+        state.panX = state.panning.panX + (event.clientX - state.panning.startX);
+        state.panY = state.panning.panY + (event.clientY - state.panning.startY);
+        applyViewport();
+      }
+    }
+
+    function onPointerUp(event) {
+      if (state.drag) {
+        const id = state.drag.id;
+        const moved = state.drag.moved;
+        const entity = nodesLayer.querySelector('.entity[data-id="' + id + '"]');
+        if (entity) entity.classList.remove("dragging");
+        state.drag = null;
+        selectTable(id, false);
+        applyHighlight();
+        return;
+      }
+
+      if (state.panning) {
+        const moved = Math.abs(event.clientX - state.panning.startX) > 3 ||
+          Math.abs(event.clientY - state.panning.startY) > 3;
+        state.panning = null;
+        svg.classList.remove("panning");
+        if (!moved) clearSelection();
+      }
+    }
+
+    svg.addEventListener("pointerdown", function (event) {
+      if (event.target !== bg && event.target !== svg) return;
+      if (event.button !== 0) return;
+      event.preventDefault();
+      state.panning = {
+        startX: event.clientX,
+        startY: event.clientY,
+        panX: state.panX,
+        panY: state.panY
+      };
+      svg.classList.add("panning");
+      svg.setPointerCapture(event.pointerId);
+    });
+
+    svg.addEventListener("pointermove", onPointerMove);
+    svg.addEventListener("pointerup", onPointerUp);
+    svg.addEventListener("pointercancel", function () {
+      if (state.drag) {
+        const entity = nodesLayer.querySelector('.entity[data-id="' + state.drag.id + '"]');
+        if (entity) entity.classList.remove("dragging");
+      }
+      state.drag = null;
+      state.panning = null;
+      svg.classList.remove("panning");
+    });
+
+    svg.addEventListener("wheel", function (event) {
+      event.preventDefault();
+      const rect = svg.getBoundingClientRect();
+      const mx = event.clientX - rect.left;
+      const my = event.clientY - rect.top;
+      const factor = event.deltaY < 0 ? 1.1 : 1 / 1.1;
+      const next = Math.max(0.35, Math.min(2.5, state.zoom * factor));
+      const k = next / state.zoom;
+      state.panX = mx - (mx - state.panX) * k;
+      state.panY = my - (my - state.panY) * k;
+      state.zoom = next;
+      applyViewport();
+    }, { passive: false });
+
+    sidebar.addEventListener("click", function (event) {
+      const tableBtn = event.target.closest("[data-table]");
+      if (tableBtn) {
+        selectTable(tableBtn.dataset.table, true);
+        return;
+      }
+      const viewBtn = event.target.closest("[data-view]");
+      if (viewBtn) selectView(viewBtn.dataset.view);
+    });
+
+    details.addEventListener("click", function (event) {
+      const go = event.target.closest("[data-goto]");
+      if (go) selectTable(go.dataset.goto, true);
+    });
+
+    searchInput.addEventListener("input", function () {
+      state.search = searchInput.value.trim();
+      renderSidebar();
+    });
+
+    toggleOptional.addEventListener("change", function () {
+      state.optionalVisible = toggleOptional.checked;
+      updateVisibility();
+      renderSidebar();
+      if (!state.optionalVisible && state.selected && OPTIONAL_IDS.has(state.selected)) {
+        clearSelection();
+      }
+    });
+
+    fitBtn.addEventListener("click", fitView);
+
+    resetBtn.addEventListener("click", function () {
+      state.zoom = 0.86;
+      state.panX = 24;
+      state.panY = 24;
+      applyViewport();
+      clearSelection();
+    });
+
+    exportBtn.addEventListener("click", function () {
+      const bbox = visibleBBox();
+      const pad = 46;
+      const clone = svg.cloneNode(true);
+      clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+      clone.setAttribute("width", String(bbox.w + pad * 2));
+      clone.setAttribute("height", String(bbox.h + pad * 2));
+      clone.setAttribute("viewBox", (bbox.x - pad) + " " + (bbox.y - pad) + " " + (bbox.w + pad * 2) + " " + (bbox.h + pad * 2));
+      const cloneViewport = clone.querySelector("#viewport");
+      if (cloneViewport) cloneViewport.setAttribute("transform", "translate(0 0) scale(1)");
+      const xml = new XMLSerializer().serializeToString(clone);
+      const blob = new Blob([xml], { type: "image/svg+xml;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "household-energy-er-diagram.svg";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+    });
+
+    renderNodes();
+    renderEdges();
+    renderSidebar();
+    renderDetailsEmpty();
+    applyViewport();
+    updateVisibility();
+
+    window.addEventListener("resize", function () {
+      applyViewport();
+    });
+
+    setTimeout(fitView, 60);
+  </script>
+</body>
+</html>
