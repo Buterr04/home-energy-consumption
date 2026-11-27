@@ -6,7 +6,7 @@
   <img src="https://img.shields.io/github/license/Buterr04/home-energy-consumption.svg">
   <img src="https://img.shields.io/badge/Language-Python-blue?logo=python&logoColor=white">
   <img src="https://img.shields.io/badge/Framework-FastAPI-green?logo=fastapi&logoColor=white">
-  <img src="https://img.shields.io/badge/Frontend-Vite%20%2B%20React-pink?logo=react&logoColor=white">
+  <img src="https://img.shields.io/badge/Frontend-Vue%203%20%2B%20Vite-42b883?logo=vuedotjs&logoColor=white">
   <img src="https://img.shields.io/badge/Database-SQLite-lightgrey?logo=sqlite&logoColor=white">
   <img src="https://img.shields.io/badge/Animation%20Library-ReactBits-blueviolet?logo=react&logoColor=white">
   
@@ -16,7 +16,7 @@
 
 ## Quick Start
 
-当前仓库已完成第一阶段初始化：FastAPI 服务、SQLite 建表、CSV 导入、演示账号、离线模型训练与推理、核心 P0/P1 接口和自包含测试均可运行。
+当前仓库已完成 FastAPI 服务、SQLite 建表、CSV 导入、账号与角色权限、离线模型推理、核心 P0/P1 接口和自包含测试。
 
 接口字段、权限、错误码和响应结构以 `docs/API.md` v0.1 为唯一契约；代码和测试严格按文档实现。
 
@@ -36,6 +36,35 @@ uvicorn app.main:app --reload
 
 原型不注册为后端路由，直接打开 `prototype/index.html` 查看。
 
+iPadOS 半透明侧栏风格的静态单文件视觉稿在 `prototype/ipados-vue.html`，仅作为视觉参考，不参与正式前端构建。
+
+## Frontend
+
+正式前端位于 `frontend/`，使用 Vue 3、TypeScript、Vite 和 Vue Router。界面为全屏 iPadOS 半透明侧栏布局，包含能源总览、用电分析、智能预测、报告中心和管理员控制台。
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+开发地址为 <http://127.0.0.1:5173/>。Vite 默认将 `/api` 代理到 `http://127.0.0.1:8000`。页面启动时自动恢复当前标签页中的 JWT 会话；没有有效会话时显示左侧品牌、右侧登录表单的全屏登录页。所有家庭、序列、预测、报告和管理员操作都直接调用 FastAPI，前端不包含演示数据或离线回退数据。
+
+登录页的高级选项可修改 API Base URL；需要指向独立部署的 API 时，复制 `frontend/.env.example` 并设置 `VITE_API_BASE_URL`。
+
+权限行为：
+
+- `user`：只加载自己拥有的家庭，最多同时选择 5 户进行对比。
+- `admin`：通过分页加载全部家庭，并显示「管理控制台」入口，可创建/停用用户、切换角色、转移家庭归属、校验或导入 CSV，并查看导入历史。
+- 普通用户直接访问 `#/admin` 会被重定向回能源总览。
+
+```bash
+npm run typecheck
+npm run build
+```
+
+`frontend/dist/` 是可直接部署的静态产物。`prototype/ipados-vue.html` 作为已确认的视觉参考保留，不参与正式构建。
+
 如果数据集不在仓库默认搜索路径，显式传入：
 
 ```bash
@@ -46,12 +75,12 @@ python -m app.scripts.bootstrap --reset --csv /path/to/household_electricity_con
 
 1. 只执行 `db/01_business.sql` 建库。
 2. 导入 CSV，处理 Latin-1 编码、去重、质量标记和家庭画像。
-3. 创建管理员与演示用户，并按平均温度分桶分配演示家庭。
-4. 离线训练 `models/rf-v1.joblib`，模型元数据只保存在模型文件中。
+3. 创建管理员与普通用户，并按平均温度分桶分配种子家庭。
+4. 校验 `models/linear-v1/` 下的两级线性模型产物；运行时不训练模型。
 
 `db/02_log.sql` 作为预留文件保留，但初始化、ORM 和运行逻辑均不使用。
 
-## Demo Accounts
+## Built-in Accounts
 
 | 用户名 | 密码 | 角色 | 家庭 |
 |---|---|---|---|
@@ -65,10 +94,9 @@ python -m app.scripts.bootstrap --reset --csv /path/to/household_electricity_con
 python -m app.scripts.init_db --reset
 python -m app.scripts.import_csv --path /path/to/data.csv
 python -m app.scripts.seed_demo
-python -m app.scripts.train_model
 ```
 
-模型训练只发生在离线脚本中；服务启动时仅加载模型文件并执行推理，不在线训练或重训。
+服务启动时仅加载 `models/linear-v1/` 下的两级线性模型并执行推理，不提供训练或重训接口。
 
 ## Tests
 
@@ -84,26 +112,28 @@ ruff check app tests main.py
 ```text
 app/
   routers/        # auth / households / consumption / ai / reports / admin
-  services/       # 聚合、导入、模型、演示数据
-  scripts/        # 建库、导入、训练、一键初始化
+  services/       # 聚合、导入、模型、种子数据
+  scripts/        # 建库、导入、一键初始化
   models.py       # SQLAlchemy ORM
   main.py         # FastAPI 应用入口
 db/               # 业务表 SQL（02 预留但不使用）
 docs/             # API 文档与 ER 图
-models/           # 离线模型产物（默认 gitignore）
+models/           # 两级线性模型产物
 prototype/        # 静态界面原型
+frontend/         # Vue 3 + TypeScript 正式前端
 tests/            # 自包含 API 测试
 ```
 
 ## Data Quality
 
-导入时按 `household_id + appliance_id + reading_date + reading_time` 去重。温度与季节明显不符的记录会标记为 `seasonal_temp_outlier`，但仍保留在业务表；离线训练视图 `training_readings` 只读取 `quality_flag = 'ok'` 的记录。家庭成员数、平均温度、日均用电等画像在导入后刷新到 `household_profiles`。
+导入时按 `household_id + appliance_id + reading_date + reading_time` 去重。温度与季节明显不符的记录会标记为 `seasonal_temp_outlier`，但仍保留在业务表。家庭成员数、平均温度、日均用电等画像在导入后刷新到 `household_profiles`。
 
 ## Documentation
 
 - [可交互数据库 ER 图](docs/ER.html)
 - [API 接口文档](docs/API.md)
 - [界面原型](prototype/index.html)
+- [iPadOS 风格视觉参考](prototype/ipados-vue.html)
 
 ## Database
 
@@ -121,4 +151,4 @@ CSV 导入同时支持管理员上传 API 和 CLI/bootstrap；导入批次记录
 
 直接用浏览器打开 `docs/ER.html` 即可查看 ER 图；页面支持拖拽实体、缩放画布、搜索表/字段、点击查看约束与关系，以及导出 SVG。
 
-模型采用离线预训练方案：FastAPI 服务只加载模型文件执行推理，不提供训练或重训接口。预测接口接收月份、房屋和居住人口，返回该房屋在指定月份的平均日用电量。
+模型采用离线预训练方案：FastAPI 服务启动时加载 `models/linear-v1/stage1_linear.joblib` 和 `stage2_linear.joblib`，只执行推理。预测接口接收室外温度、居住人口和月份，返回典型日均用电量、月度估算和 24 小时平均功率曲线，不绑定具体家庭。
