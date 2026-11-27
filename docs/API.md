@@ -3,7 +3,7 @@
 > 版本：v0.1  
 > 日期：2026-11-24  
 > 状态：草稿  
-> 技术栈：FastAPI + SQLite + SQLAlchemy/SQLModel + pandas + scikit-learn  
+> 技术栈：FastAPI + SQLite + SQLAlchemy/SQLModel + scikit-learn
 > Base URL：`/api/v1`  
 > 在线文档：FastAPI 启动后访问 `/docs` 和 `/redoc`
 
@@ -21,7 +21,7 @@
 核心约束：
 
 - 所有业务接口除登录和健康检查外，都需要 JWT。
-- 普通用户只能查询、对比、预测自己有权访问的家庭。
+- 普通用户只能查询、对比自己有权访问的家庭；预测按温度、人口、月份独立计算。
 - 对比接口最多允许 5 个家庭。
 - 不向普通用户暴露原始读数接口，只提供聚合结果。
 - 所有日期使用 `YYYY-MM-DD`，聚合周期使用 `YYYY-MM-DD`、`YYYY-MM`、`YYYY`。
@@ -41,7 +41,7 @@
 | F06 | 最多 5 户同时对比，不同颜色 | User | P0 |
 | F07 | 按电器类型筛选，例如排除冰箱 | User | P0 |
 | F08 | 全部家庭平均用电曲线叠加 | User / Admin | P0 |
-| F09 | 选择月份、房屋并填写人口，调用预训练模型预测平均日用电量 | User | P0 |
+| F09 | 输入月份、温度和人口，调用预训练模型预测平均日用电量 | User | P0 |
 | F10 | 查看预训练模型版本与离线评估指标 | User / Admin | P1 |
 | F11 | 导出月度/年度汇总报告（加分项） | User | P2 |
 | F12 | 管理员创建/禁用用户 | Admin | P1 |
@@ -189,8 +189,8 @@ GET /api/v1/consumption/series?exclude_appliance_ids=1&exclude_appliance_ids=2
 | GET | `/consumption/average` | User/Admin | 平均曲线 |
 | GET | `/consumption/breakdown` | User/Admin | 电器占比，P1 |
 | GET | `/ai/model` | User/Admin | 模型信息 |
-| POST | `/ai/predict` | User/Admin | 单户月度预测 |
-| POST | `/ai/predict/batch` | User/Admin | 多户/多月批量预测，P2 |
+| POST | `/ai/predict` | User/Admin | 月度预测 |
+| POST | `/ai/predict/batch` | User/Admin | 多月批量预测，P2 |
 | GET | `/reports/summary` | User/Admin | 导出汇总，P2 |
 | GET | `/admin/users` | Admin | 用户列表 |
 | POST | `/admin/users` | Admin | 创建用户 |
@@ -556,44 +556,44 @@ GET /api/v1/ai/model
 Authorization: Bearer <token>
 ```
 
-服务启动时加载一个已经训练好的模型文件，本接口只返回模型元数据，不触发训练或重训。
+服务启动时加载两级线性模型产物，本接口只返回模型元数据，不触发训练或重训。
 
 响应 `200`：
 
 ```json
 {
-  "version": "rf-v1",
-  "trained_at": "2026-11-30T10:00:00+08:00",
+  "version": "linear-v1",
+  "trained_at": null,
   "target": "avg_daily_kwh",
   "input_fields": [
-    "household_id",
-    "month",
-    "household_size"
-  ],
-  "features": [
-    "household_id",
     "month",
     "household_size",
-    "history_avg_daily_kwh",
-    "season"
+    "forecast_monthly_temp_c"
+  ],
+  "features": [
+    "Outdoor Temperature (°C)",
+    "Household Size",
+    "Month"
   ],
   "metrics": {
-    "mae": 0.42,
-    "rmse": 0.61,
-    "r2": 0.76
+    "mae": null,
+    "rmse": null,
+    "r2": null
   },
-  "training_rows": 70000,
-  "validation_rows": 30000
+  "training_rows": 0,
+  "validation_rows": 0,
+  "level_model": "LinearRegression",
+  "shape_model": "LinearRegression"
 }
 ```
 
-`trained_at`、`training_rows` 和 `validation_rows` 来自离线训练/评估阶段，只作为模型登记信息；服务运行时不训练模型。
+`trained_at`、`training_rows` 和 `validation_rows` 来自离线训练/评估阶段，只作为模型登记信息；服务运行时不训练模型。当前产物的元数据未包含训练指标，因此 `metrics` 为 `null`。
 
 错误：
 
 - `503 MODEL_NOT_READY`
 
-### 6.11 单户月度预测
+### 6.11 月度预测
 
 ```http
 POST /api/v1/ai/predict
@@ -601,13 +601,13 @@ Authorization: Bearer <token>
 Content-Type: application/json
 ```
 
-预测请求只需要月份、房屋和居住人口，不需要具体日期或温度。
+预测只依赖室外温度、居住人口和月份，不需要 `household_id`。
 
 ```json
 {
-  "household_id": 94,
   "month": 12,
-  "household_size": 3
+  "household_size": 3,
+  "forecast_monthly_temp_c": 8.5
 }
 ```
 
@@ -615,12 +615,21 @@ Content-Type: application/json
 
 ```json
 {
-  "household_id": 94,
   "month": 12,
   "household_size": 3,
-  "predicted_avg_daily_kwh": 10.1,
+  "predicted_avg_daily_kwh": 12.35,
   "unit": "kWh/日",
-  "model_version": "rf-v1",
+  "model_version": "linear-v1",
+  "average_daily_power_curve_kw": [
+    0.322, 0.335, 0.326, 0.306, 0.303, 0.377,
+    0.4, 0.546, 0.604, 0.522, 0.493, 0.524,
+    0.531, 0.533, 0.476, 0.516, 0.646, 0.851,
+    0.891, 0.76, 0.67, 0.578, 0.478, 0.363
+  ],
+  "monthly_energy_estimate_kwh": 382.9,
+  "temperature_used_c": 8.5,
+  "level_model": "LinearRegression",
+  "shape_model": "LinearRegression",
   "warnings": []
 }
 ```
@@ -629,19 +638,19 @@ Content-Type: application/json
 
 - `month` 为必填的 `1–12` 整数。
 - `household_size` 为必填的 `1–20` 整数，对应前端填写的居住人口。
-- 返回该房屋在指定月份的平均日用电量，单位为 `kWh/日`。
-- 月份用于季节性修正，人口会按该房屋的历史用电基准调整预测值。
-- 温度等历史特征由模型内部读取，不由调用方传入。
-- User 只能预测自己有权访问的家庭；Admin 不限。
+- `forecast_monthly_temp_c` 为必填输入，范围 `-50–60`。
+- 返回该温度、人口和月份下的典型日均用电量，单位为 `kWh/日`。
+- `average_daily_power_curve_kw` 始终包含 24 个值，对应 0–23 点；其和等于日均用电量。
+- 预测结果不绑定具体家庭，相同温度、人口和月份得到相同结果。
 
 错误：
 
 - `400 INVALID_MONTH`
 - `400 INVALID_HOUSEHOLD_SIZE`
-- `403 FORBIDDEN_HOUSEHOLD`
+- `400 INVALID_TEMPERATURE`
 - `503 MODEL_NOT_READY`
 
-### 6.12 多户/多月批量预测（P2）
+### 6.12 多月批量预测（P2）
 
 ```http
 POST /api/v1/ai/predict/batch
@@ -653,14 +662,14 @@ Content-Type: application/json
 {
   "items": [
     {
-      "household_id": 94,
       "month": 1,
-      "household_size": 3
+      "household_size": 3,
+      "forecast_monthly_temp_c": 5.0
     },
     {
-      "household_id": 435,
       "month": 7,
-      "household_size": 5
+      "household_size": 5,
+      "forecast_monthly_temp_c": 28.0
     }
   ]
 }
@@ -670,15 +679,13 @@ Content-Type: application/json
 
 ```json
 {
-  "model_version": "rf-v1",
+  "model_version": "linear-v1",
   "items": [
     {
-      "household_id": 94,
       "month": 1,
       "predicted_avg_daily_kwh": 9.6
     },
     {
-      "household_id": 435,
       "month": 7,
       "predicted_avg_daily_kwh": 15.2
     }
@@ -936,7 +943,7 @@ Authorization: Bearer <admin-token>
 
 | 角色 | 权限 |
 |---|---|
-| `user` | 访问 `households.owner_user_id = 当前用户` 的家庭；可对比、预测、导出 |
+| `user` | 访问 `households.owner_user_id = 当前用户` 的家庭；可对比、导出；预测按输入独立计算 |
 | `admin` | 访问全部家庭；管理用户、家庭归属、导入、质量摘要 |
 
 ### 7.2 家庭归属校验
@@ -1011,9 +1018,9 @@ requested_ids ⊆ accessible_ids
 
 ```json
 {
-  "household_id": 94,
   "month": 12,
-  "household_size": 3
+  "household_size": 3,
+  "forecast_monthly_temp_c": 8.5
 }
 ```
 
@@ -1021,12 +1028,21 @@ requested_ids ⊆ accessible_ids
 
 ```json
 {
-  "household_id": 94,
   "month": 12,
   "household_size": 3,
-  "predicted_avg_daily_kwh": 10.1,
+  "predicted_avg_daily_kwh": 12.35,
   "unit": "kWh/日",
-  "model_version": "rf-v1",
+  "model_version": "linear-v1",
+  "average_daily_power_curve_kw": [
+    0.322, 0.335, 0.326, 0.306, 0.303, 0.377,
+    0.4, 0.546, 0.604, 0.522, 0.493, 0.524,
+    0.531, 0.533, 0.476, 0.516, 0.646, 0.851,
+    0.891, 0.76, 0.67, 0.578, 0.478, 0.363
+  ],
+  "monthly_energy_estimate_kwh": 382.9,
+  "temperature_used_c": 8.5,
+  "level_model": "LinearRegression",
+  "shape_model": "LinearRegression",
   "warnings": []
 }
 ```
@@ -1111,7 +1127,7 @@ ORDER BY reading_date;
 - [ ] 5 户对比正常，6 户返回 `400`。
 - [ ] 排除冰箱后序列和平均曲线同步变化。
 - [ ] 平均曲线返回 `household_count` 和 `expected_households`。
-- [ ] 预测接口接收月份、房屋和人口，返回该房屋该月的平均日用电量。
+- [ ] 预测接口接收月份、温度和人口，返回典型日均用电量和 24 小时曲线。
 - [ ] 管理员可创建用户并批量设置家庭归属。
 - [ ] CSV 导入 10 万行，4 条重复被拒绝，质量摘要数据一致。
 - [ ] `/docs` 能展示全部接口并可直接调试。

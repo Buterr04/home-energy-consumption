@@ -21,14 +21,12 @@ class ModelInfo(BaseModel):
 
 
 class PredictRequest(BaseModel):
-    household_id: int
     month: int
     household_size: int
-    forecast_monthly_temp_c: float | None = None
+    forecast_monthly_temp_c: float
 
 
 class PredictResponse(BaseModel):
-    household_id: int
     month: int
     household_size: int
     predicted_avg_daily_kwh: float
@@ -47,7 +45,6 @@ class BatchPredictRequest(BaseModel):
 
 
 class BatchPredictItem(BaseModel):
-    household_id: int
     month: int
     predicted_avg_daily_kwh: float
 

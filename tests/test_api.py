@@ -143,7 +143,11 @@ def test_model_info_and_prediction(
 
     prediction = client.post(
         "/api/v1/ai/predict",
-        json={"household_id": 1, "month": 12, "household_size": 3},
+        json={
+            "forecast_monthly_temp_c": 4.0,
+            "month": 12,
+            "household_size": 3,
+        },
         headers=auth_headers(demo_token),
     )
     assert prediction.status_code == 200
@@ -157,26 +161,12 @@ def test_model_info_and_prediction(
     ) < 0.01
     assert body["temperature_used_c"] == 4.0
 
-    override = client.post(
-        "/api/v1/ai/predict",
-        json={
-            "household_id": 1,
-            "month": 12,
-            "household_size": 3,
-            "forecast_monthly_temp_c": 9.5,
-        },
-        headers=auth_headers(demo_token),
-    )
-    assert override.status_code == 200
-    assert override.json()["temperature_used_c"] == 9.5
-
     invalid_temperature = client.post(
         "/api/v1/ai/predict",
         json={
-            "household_id": 1,
+            "forecast_monthly_temp_c": 120,
             "month": 12,
             "household_size": 3,
-            "forecast_monthly_temp_c": 120,
         },
         headers=auth_headers(demo_token),
     )
@@ -185,7 +175,11 @@ def test_model_info_and_prediction(
 
     invalid = client.post(
         "/api/v1/ai/predict",
-        json={"household_id": 1, "month": 13, "household_size": 3},
+        json={
+            "forecast_monthly_temp_c": 4.0,
+            "month": 13,
+            "household_size": 3,
+        },
         headers=auth_headers(demo_token),
     )
     assert invalid.status_code == 400
@@ -195,15 +189,22 @@ def test_model_info_and_prediction(
         "/api/v1/ai/predict/batch",
         json={
             "items": [
-                {"household_id": 1, "month": 1, "household_size": 3},
-                {"household_id": 1, "month": 7, "household_size": 3},
+                {
+                    "forecast_monthly_temp_c": 5.0,
+                    "month": 1,
+                    "household_size": 3,
+                },
+                {
+                    "forecast_monthly_temp_c": 28.0,
+                    "month": 7,
+                    "household_size": 3,
+                },
             ]
         },
         headers=auth_headers(demo_token),
     )
     assert batch.status_code == 200
     assert set(batch.json()["items"][0]) == {
-        "household_id",
         "month",
         "predicted_avg_daily_kwh",
     }

@@ -1,10 +1,8 @@
 from typing import Annotated
 
 from fastapi import APIRouter, Depends
-from sqlalchemy.orm import Session
 
-from app.database import get_db
-from app.deps import ensure_household_access, get_current_user
+from app.deps import get_current_user
 from app.errors import APIError
 from app.models import User
 from app.schemas.ai import (
@@ -16,7 +14,6 @@ from app.schemas.ai import (
     PredictRequest,
     PredictResponse,
 )
-from app.services.consumption import household_month_avg_temp_c
 from app.services.linear_model import linear_model_registry
 
 router = APIRouter(prefix="/ai", tags=["AI"])
@@ -33,26 +30,12 @@ def _validate_prediction_input(payload: PredictRequest) -> None:
             "INVALID_HOUSEHOLD_SIZE",
             "household_size must be an integer between 1 and 20.",
         )
-    if (
-        payload.forecast_monthly_temp_c is not None
-        and not -50 <= payload.forecast_monthly_temp_c <= 60
-    ):
+    if not -50 <= payload.forecast_monthly_temp_c <= 60:
         raise APIError(
             400,
             "INVALID_TEMPERATURE",
             "forecast_monthly_temp_c must be between -50 and 60.",
         )
-
-
-def _resolve_temperature(
-    db: Session, payload: PredictRequest
-) -> tuple[float, list[str]]:
-    if payload.forecast_monthly_temp_c is not None:
-        return float(payload.forecast_monthly_temp_c), []
-    temperature, warning = household_month_avg_temp_c(
-        db, payload.household_id, payload.month
-    )
-    return temperature, [warning] if warning else []
 
 
 @router.get("/model", response_model=ModelInfo)
@@ -77,21 +60,17 @@ def model_info(
 @router.post("/predict", response_model=PredictResponse)
 def predict(
     payload: PredictRequest,
-    user: Annotated[User, Depends(get_current_user)],
-    db: Annotated[Session, Depends(get_db)],
+    _user: Annotated[User, Depends(get_current_user)],
 ) -> PredictResponse:
     _validate_prediction_input(payload)
-    ensure_household_access(db, user, [payload.household_id])
     info = linear_model_registry.info()
-    temperature, temperature_warnings = _resolve_temperature(db, payload)
     result = linear_model_registry.predict(
         month=payload.month,
         household_size=payload.household_size,
-        outdoor_temp_c=temperature,
+        outdoor_temp_c=payload.forecast_monthly_temp_c,
     )
 
     return PredictResponse(
-        household_id=payload.household_id,
         month=payload.month,
         household_size=payload.household_size,
         predicted_avg_daily_kwh=result["daily_average_energy_kwh"],
@@ -100,18 +79,17 @@ def predict(
             "average_daily_power_curve_kw"
         ],
         monthly_energy_estimate_kwh=result["monthly_energy_estimate_kwh"],
-        temperature_used_c=round(temperature, 2),
+        temperature_used_c=round(payload.forecast_monthly_temp_c, 2),
         level_model=result["level_model"],
         shape_model=result["shape_model"],
-        warnings=temperature_warnings + result["warnings"],
+        warnings=result["warnings"],
     )
 
 
 @router.post("/predict/batch", response_model=BatchPredictResponse)
 def predict_batch(
     payload: BatchPredictRequest,
-    user: Annotated[User, Depends(get_current_user)],
-    db: Annotated[Session, Depends(get_db)],
+    _user: Annotated[User, Depends(get_current_user)],
 ) -> BatchPredictResponse:
     if not payload.items:
         raise APIError(
@@ -119,26 +97,17 @@ def predict_batch(
         )
     for item in payload.items:
         _validate_prediction_input(item)
-    ids = list(dict.fromkeys(item.household_id for item in payload.items))
-    ensure_household_access(db, user, ids)
     info = linear_model_registry.info()
 
     results = []
-    temperature_cache: dict[tuple[int, int], float] = {}
     for item in payload.items:
-        cache_key = (item.household_id, item.month)
-        temperature = temperature_cache.get(cache_key)
-        if temperature is None:
-            temperature, _warning = _resolve_temperature(db, item)
-            temperature_cache[cache_key] = temperature
         result = linear_model_registry.predict(
             month=item.month,
             household_size=item.household_size,
-            outdoor_temp_c=temperature,
+            outdoor_temp_c=item.forecast_monthly_temp_c,
         )
         results.append(
             BatchPredictItem(
-                household_id=item.household_id,
                 month=item.month,
                 predicted_avg_daily_kwh=result["daily_average_energy_kwh"],
             )

@@ -108,12 +108,6 @@ CREATE TABLE household_profiles (
 -- Views
 -- ---------------------------------------------------------------------------
 
--- Offline model preparation/evaluation only; runtime inference does not use it.
-CREATE VIEW training_readings AS
-SELECT *
-FROM energy_readings
-WHERE quality_flag = 'ok';
-
 CREATE VIEW daily_household_consumption AS
 SELECT household_id,
        reading_date,

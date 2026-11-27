@@ -1002,14 +1002,6 @@
 
     const VIEWS = [
       {
-        id: "training_readings",
-        name: "training_readings",
-        title: "离线训练数据视图",
-        depends: ["energy_readings"],
-        desc: "只保留 quality_flag = 'ok' 的读数，供离线训练/评估取数；服务运行时推理不读取这个视图。",
-        sql: "CREATE VIEW training_readings AS\nSELECT *\nFROM energy_readings\nWHERE quality_flag = 'ok';"
-      },
-      {
         id: "daily_household_consumption",
         name: "daily_household_consumption",
         title: "家庭日用电视图",
@@ -1338,7 +1330,7 @@
       }).join("");
 
       const extra = id === "energy_readings"
-        ? '<div class="note">quality_flag 让原始数据保留，同时让离线训练只使用 training_readings 视图。<br>household_size 不做家庭级唯一约束，因为同户在原始数据中出现 1–5 多个值。</div>'
+        ? '<div class="note">quality_flag 让原始数据保留，同时标记异常读数。<br>household_size 不做家庭级唯一约束，因为同户在原始数据中出现 1–5 多个值。</div>'
         : id === "households"
           ? '<div class="note">owner_user_id 是单值外键：一个用户可拥有多户，但每个家庭只能归属一个用户。<br>人数、平均温度和平均日用电放在 household_profiles。</div>'
           : "";
