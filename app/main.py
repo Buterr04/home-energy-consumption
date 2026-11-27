@@ -20,14 +20,14 @@ from app.routers import (
     households,
     reports,
 )
-from app.services.model import model_registry
+from app.services.linear_model import linear_model_registry
 
 settings = get_settings()
 
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-    model_registry.load(settings.model_path)
+    linear_model_registry.load(settings.linear_model_dir)
     yield
 
 

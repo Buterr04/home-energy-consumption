@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class ModelMetrics(BaseModel):
@@ -16,12 +16,15 @@ class ModelInfo(BaseModel):
     metrics: ModelMetrics
     training_rows: int = 0
     validation_rows: int = 0
+    level_model: str = "LinearRegression"
+    shape_model: str = "LinearRegression"
 
 
 class PredictRequest(BaseModel):
     household_id: int
     month: int
     household_size: int
+    forecast_monthly_temp_c: float | None = None
 
 
 class PredictResponse(BaseModel):
@@ -31,7 +34,12 @@ class PredictResponse(BaseModel):
     predicted_avg_daily_kwh: float
     unit: str = "kWh/日"
     model_version: str
-    warnings: list[str] = []
+    average_daily_power_curve_kw: list[float] = Field(default_factory=list)
+    monthly_energy_estimate_kwh: float | None = None
+    temperature_used_c: float | None = None
+    level_model: str = "LinearRegression"
+    shape_model: str = "LinearRegression"
+    warnings: list[str] = Field(default_factory=list)
 
 
 class BatchPredictRequest(BaseModel):

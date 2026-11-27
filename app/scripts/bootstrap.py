@@ -13,7 +13,6 @@ from app.scripts.init_db import (
     sqlite_database_path,
 )
 from app.scripts.paths import find_default_dataset
-from app.scripts.train_model import train_and_save
 from app.services.demo import seed_demo
 from app.services.imports import import_csv_file
 
@@ -21,15 +20,12 @@ from app.services.imports import import_csv_file
 def main() -> None:
     settings = get_settings()
     parser = argparse.ArgumentParser(
-        description="Initialize schema, import CSV, seed demo users, train model."
+        description="Initialize schema, import CSV, seed demo users."
     )
     parser.add_argument("--csv", type=Path, default=None)
     parser.add_argument("--reset", action="store_true")
     parser.add_argument(
         "--skip-import", action="store_true", help="Do not import the CSV."
-    )
-    parser.add_argument(
-        "--skip-train", action="store_true", help="Do not build the model artifact."
     )
     args = parser.parse_args()
 
@@ -62,23 +58,12 @@ def main() -> None:
     finally:
         db.close()
 
-    model_path = Path(settings.model_path)
-    if not args.skip_train:
-        csv_path = args.csv or find_default_dataset()
-        if csv_path is None:
-            raise SystemExit(
-                "Dataset not found. Pass --csv or set DATASET_PATH."
-            )
-        summary["model"] = train_and_save(
-            csv_path=csv_path,
-            output_path=model_path,
-            version=settings.model_version,
-        )
-    else:
-        summary["model"] = {
-            "artifact": str(model_path),
-            "ready": model_path.exists(),
-        }
+    linear_dir = Path(settings.linear_model_dir)
+    summary["model"] = {
+        "runtime": str(linear_dir),
+        "ready": (linear_dir / "stage1_linear.joblib").exists()
+        and (linear_dir / "stage2_linear.joblib").exists(),
+    }
 
     engine.dispose()
     print(json.dumps(summary, ensure_ascii=False, indent=2))

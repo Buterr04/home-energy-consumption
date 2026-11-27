@@ -1,0 +1,22 @@
+{
+  "version": "linear-v1",
+  "trained_at": null,
+  "target": "avg_daily_kwh",
+  "input_fields": [
+    "month",
+    "household_size",
+    "forecast_monthly_temp_c"
+  ],
+  "features": [
+    "Outdoor Temperature (°C)",
+    "Household Size",
+    "Month"
+  ],
+  "metrics": {
+    "mae": null,
+    "rmse": null,
+    "r2": null
+  },
+  "training_rows": 0,
+  "validation_rows": 0
+}

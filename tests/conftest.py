@@ -1,17 +1,18 @@
+import json
 import os
 import sqlite3
 import tempfile
-from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
 
 TEST_ROOT = Path(tempfile.mkdtemp(prefix="home-energy-tests-"))
 TEST_DB = TEST_ROOT / "test.db"
-TEST_MODEL = TEST_ROOT / "model.joblib"
+TEST_LINEAR_DIR = TEST_ROOT / "linear"
 
 os.environ["DATABASE_URL"] = f"sqlite:///{TEST_DB}"
-os.environ["MODEL_PATH"] = str(TEST_MODEL)
+os.environ["LINEAR_MODEL_DIR"] = str(TEST_LINEAR_DIR)
+os.environ["MODEL_VERSION"] = "test-linear"
 os.environ["JWT_SECRET"] = "test-only-secret-that-is-at-least-32-bytes"
 
 from fastapi.testclient import TestClient  # noqa: E402
@@ -40,79 +41,100 @@ MINI_CSV = (
 @pytest.fixture(scope="session", autouse=True)
 def model_artifact() -> Path:
     import joblib
-    import pandas as pd
-    from sklearn.compose import ColumnTransformer
-    from sklearn.ensemble import RandomForestRegressor
-    from sklearn.pipeline import Pipeline
-    from sklearn.preprocessing import OneHotEncoder
+    import numpy as np
+    from sklearn.linear_model import LinearRegression
 
-    frame = pd.DataFrame(
-        {
-            "household_id": [1, 1, 2, 2, 3, 3],
-            "month": [1, 6, 2, 7, 10, 11],
-            "household_size": [3, 3, 2, 2, 4, 4],
-            "history_avg_daily_kwh": [2.5, 2.5, 1.2, 1.2, 0.8, 0.8],
-            "season": ["Winter", "Summer", "Winter", "Summer", "Fall", "Fall"],
-        }
-    )
-    target = [2.4, 2.6, 1.1, 1.3, 0.7, 0.9]
-    pipeline = Pipeline(
+    TEST_LINEAR_DIR.mkdir(parents=True, exist_ok=True)
+
+    stage1_features = [
+        "Outdoor Temperature (°C)",
+        "Household Size",
+        "Month",
+    ]
+    stage1_frame = np.asarray(
         [
-            (
-                "features",
-                ColumnTransformer(
-                    [
-                        (
-                            "season",
-                            OneHotEncoder(handle_unknown="ignore"),
-                            ["season"],
-                        ),
-                        (
-                            "numeric",
-                            "passthrough",
-                            [
-                                "household_id",
-                                "month",
-                                "household_size",
-                                "history_avg_daily_kwh",
-                            ],
-                        ),
-                    ]
-                ),
-            ),
-            ("model", RandomForestRegressor(n_estimators=20, random_state=7)),
+            [4.0, 3, 12],
+            [12.0, 2, 4],
+            [20.0, 4, 7],
+            [15.0, 1, 10],
+            [8.0, 5, 2],
+            [26.0, 2, 8],
         ]
     )
-    pipeline.fit(frame, target)
-    bundle = {
-        "pipeline": pipeline,
-        "metadata": {
-            "version": "test-rf",
-            "trained_at": datetime.now(UTC).isoformat(timespec="seconds"),
-            "target": "avg_daily_kwh",
-            "input_fields": ["household_id", "month", "household_size"],
-            "features": [
-                "household_id",
-                "month",
-                "household_size",
-                "history_avg_daily_kwh",
-                "season",
-            ],
-            "feature_columns": [
-                "household_id",
-                "month",
-                "household_size",
-                "history_avg_daily_kwh",
-                "season",
-            ],
-            "metrics": {"mae": 0.2, "rmse": 0.3, "r2": 0.8},
-            "training_rows": 4,
-            "validation_rows": 2,
-            "fallback_history": 1.5,
+    stage1_target = [3.2, 2.6, 1.8, 2.0, 3.4, 2.2]
+    stage1_model = LinearRegression().fit(stage1_frame, stage1_target)
+    joblib.dump(
+        {
+            "model": stage1_model,
+            "features": stage1_features,
+            "target": "Daily Average Energy (kWh/day)",
         },
-    }
-    joblib.dump(bundle, TEST_MODEL)
-    return TEST_MODEL
+        TEST_LINEAR_DIR / "stage1_linear.joblib",
+    )
+
+    columns = [
+        "Outdoor Temperature (°C)",
+        "Household Size",
+        *(f"m_{month}" for month in range(1, 13)),
+        *(f"h_{hour}" for hour in range(24)),
+        *(
+            f"mh_{month}_{hour}"
+            for month in range(1, 13)
+            for hour in range(24)
+        ),
+    ]
+    rows = []
+    for hour in range(24):
+        values = {
+            "Outdoor Temperature (°C)": 12.0,
+            "Household Size": 3.0,
+            **{f"m_{month}": float(month == 12) for month in range(1, 13)},
+            **{f"h_{item}": float(item == hour) for item in range(24)},
+            **{
+                f"mh_{month}_{item}": float(
+                    month == 12 and item == hour
+                )
+                for month in range(1, 13)
+                for item in range(24)
+            },
+        }
+        rows.append([values[column] for column in columns])
+    shares = 1 / 24 + np.sin((np.arange(24) - 6) / 24 * 2 * np.pi) * 0.005
+    stage2_model = LinearRegression().fit(np.asarray(rows), shares)
+    joblib.dump(
+        {
+            "type": "long",
+            "columns": columns,
+            "model": stage2_model,
+            "input_features": [
+                "Outdoor Temperature (°C)",
+                "Household Size",
+                "Month",
+            ],
+            "output": "hourly share",
+        },
+        TEST_LINEAR_DIR / "stage2_linear.joblib",
+    )
+    (TEST_LINEAR_DIR / "metadata.json").write_text(
+        json.dumps(
+            {
+                "version": "test-linear",
+                "trained_at": None,
+                "target": "avg_daily_kwh",
+                "input_fields": [
+                    "month",
+                    "household_size",
+                    "forecast_monthly_temp_c",
+                ],
+                "features": stage1_features,
+                "metrics": {"mae": 0.2, "rmse": 0.3, "r2": 0.8},
+                "training_rows": 4,
+                "validation_rows": 2,
+            }
+        ),
+        encoding="utf-8",
+    )
+    return TEST_LINEAR_DIR
 
 
 @pytest.fixture(scope="session", autouse=True)

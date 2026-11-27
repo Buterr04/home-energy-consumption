@@ -466,3 +466,43 @@ def household_avg_daily_kwh(db: Session, household_id: int) -> float | None:
     if not row.days:
         return None
     return float(row.total or 0) / int(row.days)
+
+
+def household_month_avg_temp_c(
+    db: Session, household_id: int, month: int
+) -> tuple[float, str | None]:
+    month_text = f"{month:02d}"
+    household_temp = db.scalar(
+        select(func.avg(EnergyReading.outdoor_temp_c)).where(
+            EnergyReading.household_id == household_id,
+            EnergyReading.quality_flag == "ok",
+            func.substr(EnergyReading.reading_date, 6, 2) == month_text,
+        )
+    )
+    if household_temp is not None:
+        return float(household_temp), None
+
+    profile = db.get(HouseholdProfile, household_id)
+    if profile is not None and profile.avg_temp_c is not None:
+        return (
+            float(profile.avg_temp_c),
+            "No monthly temperature history was found; the household average "
+            "temperature was used.",
+        )
+
+    global_temp = db.scalar(
+        select(func.avg(EnergyReading.outdoor_temp_c)).where(
+            EnergyReading.quality_flag == "ok",
+            func.substr(EnergyReading.reading_date, 6, 2) == month_text,
+        )
+    )
+    if global_temp is not None:
+        return (
+            float(global_temp),
+            "No household temperature history was found; the global monthly "
+            "average temperature was used.",
+        )
+
+    return 20.0, (
+        "No temperature history was found; the default 20°C was used."
+    )

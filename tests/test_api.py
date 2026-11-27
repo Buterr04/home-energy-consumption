@@ -137,7 +137,9 @@ def test_model_info_and_prediction(
         "/api/v1/ai/model", headers=auth_headers(demo_token)
     )
     assert info.status_code == 200
-    assert info.json()["version"] == "test-rf"
+    assert info.json()["version"] == "test-linear"
+    assert info.json()["level_model"] == "LinearRegression"
+    assert info.json()["shape_model"] == "LinearRegression"
 
     prediction = client.post(
         "/api/v1/ai/predict",
@@ -145,7 +147,41 @@ def test_model_info_and_prediction(
         headers=auth_headers(demo_token),
     )
     assert prediction.status_code == 200
-    assert prediction.json()["predicted_avg_daily_kwh"] >= 0
+    body = prediction.json()
+    assert body["predicted_avg_daily_kwh"] >= 0
+    assert len(body["average_daily_power_curve_kw"]) == 24
+    assert all(value >= 0 for value in body["average_daily_power_curve_kw"])
+    assert abs(
+        sum(body["average_daily_power_curve_kw"])
+        - body["predicted_avg_daily_kwh"]
+    ) < 0.01
+    assert body["temperature_used_c"] == 4.0
+
+    override = client.post(
+        "/api/v1/ai/predict",
+        json={
+            "household_id": 1,
+            "month": 12,
+            "household_size": 3,
+            "forecast_monthly_temp_c": 9.5,
+        },
+        headers=auth_headers(demo_token),
+    )
+    assert override.status_code == 200
+    assert override.json()["temperature_used_c"] == 9.5
+
+    invalid_temperature = client.post(
+        "/api/v1/ai/predict",
+        json={
+            "household_id": 1,
+            "month": 12,
+            "household_size": 3,
+            "forecast_monthly_temp_c": 120,
+        },
+        headers=auth_headers(demo_token),
+    )
+    assert invalid_temperature.status_code == 400
+    assert invalid_temperature.json()["detail"]["code"] == "INVALID_TEMPERATURE"
 
     invalid = client.post(
         "/api/v1/ai/predict",

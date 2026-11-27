@@ -14,8 +14,8 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     access_token_expire_minutes: int = 60
 
-    model_version: str = "rf-v1"
-    model_path: str = str(BASE_DIR / "models" / "rf-v1.joblib")
+    model_version: str = "linear-v1"
+    linear_model_dir: str = str(BASE_DIR / "models" / "linear-v1")
 
     cors_origins: list[str] = [
         "http://localhost:5173",
