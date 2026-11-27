@@ -206,8 +206,10 @@ def import_csv(
         appliance_id = appliances.get(appliance_name)
         if appliance_id is None:
             if dry_run:
-                appliance_id = -1 - len(dry_appliance_ids)
-                dry_appliance_ids[appliance_name] = appliance_id
+                appliance_id = dry_appliance_ids.get(appliance_name)
+                if appliance_id is None:
+                    appliance_id = -1 - len(dry_appliance_ids)
+                    dry_appliance_ids[appliance_name] = appliance_id
             else:
                 appliance = Appliance(name=appliance_name)
                 db.add(appliance)

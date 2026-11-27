@@ -134,14 +134,38 @@ export interface ModelInfo {
 }
 
 export interface PredictRequest {
+  household_id: number
   month: number
   household_size: number
   forecast_monthly_temp_c: number
 }
 
+export interface PredictHistoryPoint {
+  period: string
+  actual_avg_daily_kwh: number
+  temperature_c: number | null
+  reading_days: number
+  total_kwh: number
+}
+
+export interface PredictForecastPoint {
+  period: string
+  predicted_avg_daily_kwh: number
+  temperature_used_c: number
+  monthly_energy_estimate_kwh: number | null
+}
+
 export interface PredictResponse {
+  household_id: number
+  display_name: string
   month: number
   household_size: number
+  anchor_month: string | null
+  forecast_start_month: string | null
+  forecast_end_month: string | null
+  history_basis: 'aggregate' | 'appliance_sum' | 'mixed' | 'none'
+  history: PredictHistoryPoint[]
+  forecast: PredictForecastPoint[]
   predicted_avg_daily_kwh: number
   unit: string
   model_version: string
@@ -151,14 +175,6 @@ export interface PredictResponse {
   level_model?: string
   shape_model?: string
   warnings: string[]
-}
-
-export interface BatchPredictResponse {
-  model_version: string
-  items: Array<{
-    month: number
-    predicted_avg_daily_kwh: number
-  }>
 }
 
 export interface ImportHistoryItem {

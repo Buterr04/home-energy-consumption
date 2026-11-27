@@ -30,7 +30,7 @@ const pageTitle = computed(() => {
   const titles: Record<string, string> = {
     '/overview': `${greeting.value}，今天用能如何？`,
     '/analysis': '把每一度电看得更清楚',
-    '/predict': '按温度、人口和月份预估用电',
+    '/predict': '选定家庭，把历史和未来连成一条曲线',
     '/reports': '把洞察整理成可分享的汇总',
     '/admin': '管理系统用户、家庭归属与数据导入'
   }
@@ -44,7 +44,7 @@ const headerSubtitle = computed(() => {
     return '按日或按月聚合，最多同时对比 5 户家庭，并可按电器类型排除读数。'
   }
   if (route.path === '/predict') {
-    return `使用离线预训练的 ${state.modelInfo.version || 'linear-v1'} 模型，只做推理，不在线训练。`
+    return '选择家庭后用温度、人口和月份推理，历史实际值与未来预测连续展示。'
   }
   if (route.path === '/admin') {
     return '管理员可管理全部家庭、创建或停用用户、调整家庭归属并上传 CSV 数据。'

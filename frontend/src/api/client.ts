@@ -1,7 +1,6 @@
 import type {
   AdminUser,
   AverageResponse,
-  BatchPredictResponse,
   BreakdownResponse,
   CreateUserPayload,
   CurrentUser,
@@ -232,13 +231,6 @@ export const api = {
     return request<PredictResponse>('/ai/predict', {
       method: 'POST',
       body: JSON.stringify(payload)
-    })
-  },
-
-  async predictBatch(items: PredictRequest[]): Promise<BatchPredictResponse> {
-    return request<BatchPredictResponse>('/ai/predict/batch', {
-      method: 'POST',
-      body: JSON.stringify({ items })
     })
   },
 

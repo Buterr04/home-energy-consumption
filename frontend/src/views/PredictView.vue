@@ -1,12 +1,19 @@
 <script setup lang="ts">
 import { computed, onMounted } from 'vue'
 import AppIcon from '../components/AppIcon.vue'
+import PredictionChart from '../components/PredictionChart.vue'
 import { useEnergyStore } from '../stores/energy'
-import { formatNumber } from '../utils/format'
+import { formatPeriodCn } from '../utils/format'
 
 const store = useEnergyStore()
 const state = store.state
 const months = Array.from({ length: 12 }, (_, index) => index + 1)
+
+const selectedHousehold = computed(() =>
+  state.households.find(
+    (home) => home.household_id === state.prediction.householdId
+  ) ?? null
+)
 
 const predictionDisplay = computed(() => {
   const value = state.prediction.liveResult
@@ -14,45 +21,42 @@ const predictionDisplay = computed(() => {
 })
 
 const predictionSubline = computed(() => {
-  const value = state.prediction.liveResult
-  if (value == null) {
+  const result = state.prediction.lastPrediction
+  if (!result) {
     return '点击生成预测以调用后端模型'
   }
-  return `输入温度 ${state.prediction.temperature}°C · API 推理结果`
+  return `${formatPeriodCn(result.forecast_start_month ?? '')} 起 · 历史截至 ${formatPeriodCn(result.anchor_month ?? '')}`
 })
 
-const forecastMonths = computed(() => {
-  if (
-    !state.liveForecast ||
-    state.liveForecast.length !== 12 ||
-    !state.liveForecast.every((value) => Number.isFinite(Number(value)))
-  ) {
-    return months.map((month) => ({ month, value: null, height: 0 }))
+const historyBasisLabel = computed(() => {
+  const basis = state.prediction.lastPrediction?.history_basis
+  if (!basis) return '—'
+  if (basis === 'aggregate') return 'Aggregate'
+  if (basis === 'mixed') return '混合口径'
+  if (basis === 'appliance_sum') return '分项汇总'
+  return '暂无数据'
+})
+
+function onHouseholdChange(event: Event): void {
+  const householdId = Number((event.target as HTMLSelectElement).value)
+  if (Number.isFinite(householdId)) {
+    store.selectPredictionHousehold(householdId)
   }
-  const values = months.map((month) => Number(state.liveForecast?.[month - 1]) || 0)
-  const max = Math.max(...values, 0.001)
-  return values.map((value, index) => ({
-    month: index + 1,
-    value,
-    height: Math.max(6, (value / max) * 100)
-  }))
-})
-
-const metricWidths = computed(() => ({
-  mae: Math.min(100, Math.max(8, Number(state.modelInfo.metrics.mae || 0) * 100)),
-  rmse: Math.min(100, Math.max(8, Number(state.modelInfo.metrics.rmse || 0) * 80)),
-  r2: Math.min(100, Math.max(8, Number(state.modelInfo.metrics.r2 || 0) * 100))
-}))
+}
 
 onMounted(() => {
-  if (state.connected && state.prediction.liveResult === null && !state.prediction.loading) {
+  if (!state.connected) return
+  if (state.prediction.householdId === null && state.households.length) {
+    store.selectPredictionHousehold(state.households[0].household_id)
+  }
+  if (state.prediction.liveResult === null && !state.prediction.loading) {
     void store.runPrediction()
   }
 })
 </script>
 
 <template>
-  <div>
+  <div class="predict-page">
     <section class="predict-layout">
       <div class="predict-form-card">
         <span class="form-kicker">
@@ -60,11 +64,37 @@ onMounted(() => {
           PRETRAINED · DAILY FORECAST
         </span>
         <h2>预测每日用电量</h2>
-        <p>输入月份、温度和居住人口，调用已加载的离线模型进行推理，不绑定具体家庭。</p>
+        <p>选择家庭后，模型用温度、人口和月份推理，并把该家庭历史曲线与未来预测连续展示。</p>
 
         <div class="form-grid">
+          <div class="field-group form-span-2">
+            <label class="field-label" for="predict-household">预测家庭</label>
+            <div class="select-wrap">
+              <select
+                id="predict-household"
+                :value="state.prediction.householdId ?? ''"
+                @change="onHouseholdChange"
+              >
+                <option disabled value="">请选择家庭</option>
+                <option
+                  v-for="home in state.households"
+                  :key="home.household_id"
+                  :value="home.household_id"
+                >
+                  {{ home.display_name }}
+                </option>
+              </select>
+              <span class="select-chevron"><AppIcon name="chevronDown" :size="12" /></span>
+            </div>
+            <p v-if="selectedHousehold" class="predict-household-meta">
+              {{ selectedHousehold.size_median ?? '—' }} 人 ·
+              数据 {{ selectedHousehold.first_date ? formatPeriodCn(selectedHousehold.first_date) : '—' }}
+              至 {{ selectedHousehold.last_date ? formatPeriodCn(selectedHousehold.last_date) : '—' }}
+            </p>
+          </div>
+
           <div class="field-group">
-            <label class="field-label" for="predict-month">预测月份</label>
+            <label class="field-label" for="predict-month">预测起始月</label>
             <div class="select-wrap">
               <select id="predict-month" v-model.number="state.prediction.month">
                 <option v-for="month in months" :key="month" :value="month">
@@ -109,8 +139,8 @@ onMounted(() => {
         </div>
 
         <p class="form-help">
-          <strong>POST</strong> /api/v1/ai/predict · 输入字段：forecast_monthly_temp_c、household_size、month。
-          预测结果不绑定具体家庭。
+          <strong>POST</strong> /api/v1/ai/predict · 输入 household_id、month、household_size、forecast_monthly_temp_c。
+          历史取最近 12 个月，预测默认从家庭最后数据月的下一个月开始。
         </p>
 
         <button
@@ -133,7 +163,9 @@ onMounted(() => {
             <AppIcon name="bolt" :size="12" />
             预计平均日用电
           </span>
-          <span class="model-tag">{{ state.modelInfo.version || '后端模型' }}</span>
+          <span v-if="selectedHousehold" class="result-home-tag">
+            {{ selectedHousehold.display_name }}
+          </span>
         </div>
         <div class="result-main-value">
           {{ predictionDisplay }}<small>kWh / 日</small>
@@ -145,8 +177,14 @@ onMounted(() => {
         <div class="result-divider"></div>
         <div class="result-facts">
           <div class="result-fact">
-            <span>月份</span>
-            <strong>{{ state.prediction.month }} 月</strong>
+            <span>预测起点</span>
+            <strong>
+              {{
+                state.prediction.lastPrediction?.forecast_start_month
+                  ? formatPeriodCn(state.prediction.lastPrediction.forecast_start_month)
+                  : `${state.prediction.month} 月`
+              }}
+            </strong>
           </div>
           <div class="result-fact">
             <span>温度</span>
@@ -156,70 +194,25 @@ onMounted(() => {
             <span>居住人口</span>
             <strong>{{ state.prediction.size }} 人</strong>
           </div>
+          <div class="result-fact">
+            <span>历史口径</span>
+            <strong>{{ historyBasisLabel }}</strong>
+          </div>
         </div>
         <p class="result-note">
-          结果为给定温度、人口和月份下的典型日均用电估计，不绑定具体家庭。
+          历史总用电优先使用 Aggregate，缺失时回退到分项汇总；未来除起始月外，其余月份使用该家庭同月份历史均温。
         </p>
       </div>
     </section>
 
-    <div class="predict-bottom">
-      <section class="card forecast-card">
-        <div class="forecast-head">
-          <div>
-            <h2>全年季节曲线</h2>
-            <p>{{ state.prediction.temperature }}°C · {{ state.prediction.size }} 人 · 按当前温度估算全年</p>
-          </div>
-          <span class="micro-label">12 MONTHS</span>
-        </div>
-        <div class="forecast-bars">
-          <div
-            v-for="item in forecastMonths"
-            :key="item.month"
-            class="forecast-bar-col"
-            :class="{ active: item.month === state.prediction.month }"
-          >
-            <div class="forecast-bar-space">
-              <span
-                v-if="item.value !== null"
-                class="forecast-bar"
-                :style="{ height: item.height + '%' }"
-                :title="`${item.month}月 · ${item.value.toFixed(2)} kWh/日`"
-              ></span>
-              <span v-else class="forecast-bar-empty"></span>
-            </div>
-            <small>{{ item.month }}</small>
-          </div>
-        </div>
-      </section>
-
-      <section class="card model-card">
-        <div class="model-head">
-          <h2>模型信息</h2>
-          <p>GET /api/v1/ai/model</p>
-        </div>
-        <div class="model-body">
-          <div class="model-metric">
-            <span>MAE</span>
-            <div class="model-metric-bar"><i :style="{ width: metricWidths.mae + '%' }"></i></div>
-            <strong>{{ state.modelInfo.metrics.mae ?? '—' }}</strong>
-          </div>
-          <div class="model-metric">
-            <span>RMSE</span>
-            <div class="model-metric-bar"><i :style="{ width: metricWidths.rmse + '%' }"></i></div>
-            <strong>{{ state.modelInfo.metrics.rmse ?? '—' }}</strong>
-          </div>
-          <div class="model-metric">
-            <span>R²</span>
-            <div class="model-metric-bar"><i :style="{ width: metricWidths.r2 + '%' }"></i></div>
-            <strong>{{ state.modelInfo.metrics.r2 ?? '—' }}</strong>
-          </div>
-        </div>
-        <div class="model-meta">
-          <span>{{ state.modelInfo.version || '模型信息' }} · 离线预训练</span>
-          <span>{{ formatNumber(state.modelInfo.training_rows) }} rows</span>
-        </div>
-      </section>
-    </div>
+    <PredictionChart
+      v-if="state.prediction.lastPrediction"
+      :history="state.prediction.history"
+      :forecast="state.prediction.forecast"
+      :household-name="state.prediction.lastPrediction.display_name"
+      :anchor-month="state.prediction.lastPrediction.anchor_month"
+      :history-basis="state.prediction.lastPrediction.history_basis"
+      :loading="state.prediction.loading"
+    />
   </div>
 </template>

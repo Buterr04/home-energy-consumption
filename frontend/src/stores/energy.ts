@@ -15,6 +15,9 @@ import type {
   Household,
   HouseholdSeries,
   ModelInfo,
+  PredictHistoryPoint,
+  PredictForecastPoint,
+  PredictResponse,
   RangeOption
 } from '../api/types'
 import { PALETTE } from '../data/constants'
@@ -44,10 +47,14 @@ interface ToastState {
 }
 
 export interface PredictionState {
+  householdId: number | null
   month: number
   size: number
   temperature: number
   liveResult: number | null
+  lastPrediction: PredictResponse | null
+  history: PredictHistoryPoint[]
+  forecast: PredictForecastPoint[]
   loading: boolean
 }
 
@@ -75,7 +82,6 @@ interface EnergyState {
   modelInfo: ModelInfo
   loading: boolean
   prediction: PredictionState
-  liveForecast: number[] | null
   recentReports: RecentReport[]
   toast: ToastState
 }
@@ -134,13 +140,16 @@ export const energy = reactive<EnergyState>({
   modelInfo: { ...EMPTY_MODEL, metrics: { ...EMPTY_MODEL.metrics } },
   loading: false,
   prediction: {
+    householdId: null,
     month: new Date().getMonth() + 1,
     size: 1,
     temperature: 20,
     liveResult: null,
+    lastPrediction: null,
+    history: [],
+    forecast: [],
     loading: false
   },
-  liveForecast: null,
   recentReports: [],
   toast: { visible: false, message: '', tone: 'default' }
 })
@@ -256,7 +265,9 @@ function colorForHousehold(id: number): string {
 
 function resetPredictionOutput(): void {
   energy.prediction.liveResult = null
-  energy.liveForecast = null
+  energy.prediction.lastPrediction = null
+  energy.prediction.history = []
+  energy.prediction.forecast = []
 }
 
 function clearData(): void {
@@ -272,7 +283,10 @@ function clearData(): void {
   energy.prediction.size = 1
   energy.prediction.temperature = 20
   energy.prediction.liveResult = null
-  energy.liveForecast = null
+  energy.prediction.lastPrediction = null
+  energy.prediction.history = []
+  energy.prediction.forecast = []
+  energy.prediction.householdId = null
   energy.recentReports = []
   energy.connected = false
 }
@@ -534,9 +548,34 @@ function normalizePopulation(): void {
   energy.prediction.size = Math.min(20, Math.max(1, Math.round(Number(energy.prediction.size) || 1)))
 }
 
+function nextForecastMonth(lastDate: string | null): number {
+  const month = lastDate ? Number(lastDate.slice(5, 7)) : new Date().getMonth() + 1
+  return month >= 1 && month <= 12 ? (month % 12) + 1 : new Date().getMonth() + 1
+}
+
+function selectPredictionHousehold(householdId: number): void {
+  const household = energy.households.find((home) => home.household_id === householdId)
+  if (!household) return
+  energy.prediction.householdId = household.household_id
+  energy.prediction.size = Math.min(
+    20,
+    Math.max(1, Math.round(Number(household.size_median) || 1))
+  )
+  energy.prediction.temperature = Number(
+    (household.avg_temp_c ?? energy.prediction.temperature).toFixed(1)
+  )
+  energy.prediction.month = nextForecastMonth(household.last_date)
+  resetPredictionOutput()
+}
+
 async function runPrediction(): Promise<void> {
   if (!energy.connected) {
     notify('请先登录后端服务。', 'warn')
+    return
+  }
+  const householdId = energy.prediction.householdId
+  if (householdId === null) {
+    notify('请先选择预测家庭。', 'warn')
     return
   }
   normalizePopulation()
@@ -547,25 +586,15 @@ async function runPrediction(): Promise<void> {
   energy.prediction.loading = true
   try {
     const result = await api.predict({
+      household_id: householdId,
       month: energy.prediction.month,
       household_size: energy.prediction.size,
       forecast_monthly_temp_c: energy.prediction.temperature
     })
     energy.prediction.liveResult = result.predicted_avg_daily_kwh
-    const batch = await api.predictBatch(
-      Array.from({ length: 12 }, (_, index) => ({
-        forecast_monthly_temp_c: energy.prediction.temperature,
-        month: index + 1,
-        household_size: energy.prediction.size
-      }))
-    )
-    const values = new Array<number | null>(12).fill(null)
-    batch.items.forEach((item) => {
-      values[item.month - 1] = item.predicted_avg_daily_kwh
-    })
-    energy.liveForecast = values.every((value): value is number => value !== null)
-      ? values
-      : null
+    energy.prediction.lastPrediction = result
+    energy.prediction.history = result.history
+    energy.prediction.forecast = result.forecast
     notify('模型推理完成。')
   } catch (error) {
     notify(errorMessage(error), 'warn')
@@ -628,6 +657,7 @@ export function useEnergyStore() {
     exportReport,
     changePopulation,
     normalizePopulation,
+    selectPredictionHousehold,
     notify
   }
 }
@@ -635,6 +665,7 @@ export function useEnergyStore() {
 export function initializeEnergyStore(): void {
   watch(
     () => [
+      energy.prediction.householdId,
       energy.prediction.month,
       energy.prediction.size,
       energy.prediction.temperature

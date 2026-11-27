@@ -1,3 +1,5 @@
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 
@@ -21,14 +23,40 @@ class ModelInfo(BaseModel):
 
 
 class PredictRequest(BaseModel):
+    household_id: int
     month: int
     household_size: int
     forecast_monthly_temp_c: float
 
 
+class PredictHistoryPoint(BaseModel):
+    period: str
+    actual_avg_daily_kwh: float
+    temperature_c: float | None = None
+    reading_days: int
+    total_kwh: float
+
+
+class PredictForecastPoint(BaseModel):
+    period: str
+    predicted_avg_daily_kwh: float
+    temperature_used_c: float
+    monthly_energy_estimate_kwh: float | None = None
+
+
 class PredictResponse(BaseModel):
+    household_id: int
+    display_name: str
     month: int
     household_size: int
+    anchor_month: str | None = None
+    forecast_start_month: str | None = None
+    forecast_end_month: str | None = None
+    history_basis: Literal[
+        "aggregate", "appliance_sum", "mixed", "none"
+    ] = "none"
+    history: list[PredictHistoryPoint] = Field(default_factory=list)
+    forecast: list[PredictForecastPoint] = Field(default_factory=list)
     predicted_avg_daily_kwh: float
     unit: str = "kWh/日"
     model_version: str

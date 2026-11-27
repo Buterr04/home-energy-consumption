@@ -151,4 +151,4 @@ CSV 导入同时支持管理员上传 API 和 CLI/bootstrap；导入批次记录
 
 直接用浏览器打开 `docs/ER.html` 即可查看 ER 图；页面支持拖拽实体、缩放画布、搜索表/字段、点击查看约束与关系，以及导出 SVG。
 
-模型采用离线预训练方案：FastAPI 服务启动时加载 `models/linear-v1/stage1_linear.joblib` 和 `stage2_linear.joblib`，只执行推理。预测接口接收室外温度、居住人口和月份，返回典型日均用电量、月度估算和 24 小时平均功率曲线，不绑定具体家庭。
+模型采用离线预训练方案：FastAPI 服务启动时加载 `models/linear-v1/stage1_linear.joblib` 和 `stage2_linear.joblib`，只执行推理。预测接口接收家庭、室外温度、居住人口和起始月份，返回典型日均用电量、24 小时平均功率曲线，以及该家庭最近 12 个月历史与未来 6 个月预测。家庭 ID 只用于权限校验和历史取数，不是模型特征；历史总用电优先使用 `Aggregate`，缺失时才回退到分项汇总。

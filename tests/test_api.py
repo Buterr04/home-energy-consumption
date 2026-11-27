@@ -144,8 +144,9 @@ def test_model_info_and_prediction(
     prediction = client.post(
         "/api/v1/ai/predict",
         json={
+            "household_id": 1,
             "forecast_monthly_temp_c": 4.0,
-            "month": 12,
+            "month": 1,
             "household_size": 3,
         },
         headers=auth_headers(demo_token),
@@ -153,6 +154,17 @@ def test_model_info_and_prediction(
     assert prediction.status_code == 200
     body = prediction.json()
     assert body["predicted_avg_daily_kwh"] >= 0
+    assert body["household_id"] == 1
+    assert body["anchor_month"] == "2023-12"
+    assert body["history_basis"] == "appliance_sum"
+    assert body["history"][-1]["period"] == "2023-12"
+    assert body["forecast_start_month"] == "2024-01"
+    assert body["forecast"][-1]["period"] == "2024-06"
+    assert len(body["forecast"]) == 6
+    assert (
+        body["predicted_avg_daily_kwh"]
+        == body["forecast"][0]["predicted_avg_daily_kwh"]
+    )
     assert len(body["average_daily_power_curve_kw"]) == 24
     assert all(value >= 0 for value in body["average_daily_power_curve_kw"])
     assert abs(
@@ -164,6 +176,7 @@ def test_model_info_and_prediction(
     invalid_temperature = client.post(
         "/api/v1/ai/predict",
         json={
+            "household_id": 1,
             "forecast_monthly_temp_c": 120,
             "month": 12,
             "household_size": 3,
@@ -176,6 +189,7 @@ def test_model_info_and_prediction(
     invalid = client.post(
         "/api/v1/ai/predict",
         json={
+            "household_id": 1,
             "forecast_monthly_temp_c": 4.0,
             "month": 13,
             "household_size": 3,
@@ -185,16 +199,31 @@ def test_model_info_and_prediction(
     assert invalid.status_code == 400
     assert invalid.json()["detail"]["code"] == "INVALID_MONTH"
 
+    forbidden = client.post(
+        "/api/v1/ai/predict",
+        json={
+            "household_id": 3,
+            "forecast_monthly_temp_c": 4.0,
+            "month": 1,
+            "household_size": 3,
+        },
+        headers=auth_headers(demo_token),
+    )
+    assert forbidden.status_code == 403
+    assert forbidden.json()["detail"]["code"] == "FORBIDDEN_HOUSEHOLD"
+
     batch = client.post(
         "/api/v1/ai/predict/batch",
         json={
             "items": [
                 {
+                    "household_id": 1,
                     "forecast_monthly_temp_c": 5.0,
                     "month": 1,
                     "household_size": 3,
                 },
                 {
+                    "household_id": 2,
                     "forecast_monthly_temp_c": 28.0,
                     "month": 7,
                     "household_size": 3,
@@ -208,6 +237,78 @@ def test_model_info_and_prediction(
         "month",
         "predicted_avg_daily_kwh",
     }
+
+
+def test_monthly_history_prefers_aggregate() -> None:
+    from datetime import date
+
+    from app.database import SessionLocal
+    from app.models import Appliance, EnergyReading, Household
+    from app.services.consumption import household_monthly_totals
+
+    db = SessionLocal()
+    try:
+        aggregate = Appliance(name="Aggregate")
+        db.add(aggregate)
+        db.add(Household(id=99, display_name="Aggregate Test"))
+        db.flush()
+        db.add_all(
+            [
+                EnergyReading(
+                    household_id=99,
+                    appliance_id=int(aggregate.id),
+                    reading_date="2024-01-01",
+                    reading_time="00:00",
+                    energy_kwh=10.0,
+                    outdoor_temp_c=8.0,
+                    season="Winter",
+                    household_size=3,
+                ),
+                EnergyReading(
+                    household_id=99,
+                    appliance_id=1,
+                    reading_date="2024-01-01",
+                    reading_time="00:00",
+                    energy_kwh=4.0,
+                    outdoor_temp_c=8.0,
+                    season="Winter",
+                    household_size=3,
+                ),
+                EnergyReading(
+                    household_id=99,
+                    appliance_id=int(aggregate.id),
+                    reading_date="2024-01-02",
+                    reading_time="00:00",
+                    energy_kwh=12.0,
+                    outdoor_temp_c=9.0,
+                    season="Winter",
+                    household_size=3,
+                ),
+                EnergyReading(
+                    household_id=99,
+                    appliance_id=1,
+                    reading_date="2024-01-02",
+                    reading_time="00:00",
+                    energy_kwh=5.0,
+                    outdoor_temp_c=9.0,
+                    season="Winter",
+                    household_size=3,
+                ),
+            ]
+        )
+        db.flush()
+
+        result = household_monthly_totals(
+            db, 99, date(2024, 1, 1), date(2024, 1, 31)
+        )
+
+        assert len(result) == 1
+        assert result[0]["total_kwh"] == 22.0
+        assert result[0]["actual_avg_daily_kwh"] == 11.0
+        assert result[0]["basis"] == "aggregate"
+    finally:
+        db.rollback()
+        db.close()
 
 
 def test_admin_management(

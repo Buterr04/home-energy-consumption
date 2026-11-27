@@ -21,7 +21,7 @@
 核心约束：
 
 - 所有业务接口除登录和健康检查外，都需要 JWT。
-- 普通用户只能查询、对比自己有权访问的家庭；预测按温度、人口、月份独立计算。
+- 普通用户只能查询、对比自己有权访问的家庭；预测也必须指定有权限访问的家庭。
 - 对比接口最多允许 5 个家庭。
 - 不向普通用户暴露原始读数接口，只提供聚合结果。
 - 所有日期使用 `YYYY-MM-DD`，聚合周期使用 `YYYY-MM-DD`、`YYYY-MM`、`YYYY`。
@@ -41,7 +41,7 @@
 | F06 | 最多 5 户同时对比，不同颜色 | User | P0 |
 | F07 | 按电器类型筛选，例如排除冰箱 | User | P0 |
 | F08 | 全部家庭平均用电曲线叠加 | User / Admin | P0 |
-| F09 | 输入月份、温度和人口，调用预训练模型预测平均日用电量 | User | P0 |
+| F09 | 选择家庭并输入月份、温度和人口，返回历史与未来连续预测曲线 | User | P0 |
 | F10 | 查看预训练模型版本与离线评估指标 | User / Admin | P1 |
 | F11 | 导出月度/年度汇总报告（加分项） | User | P2 |
 | F12 | 管理员创建/禁用用户 | Admin | P1 |
@@ -160,6 +160,7 @@ GET /api/v1/consumption/series?exclude_appliance_ids=1&exclude_appliance_ids=2
 | HTTP | code | 场景 |
 |---|---|---|
 | 400 | `INVALID_DATE_RANGE` | 开始日期晚于结束日期 |
+| 400 | `INVALID_HOUSEHOLD_ID` | 预测请求的 `household_id` 不是正整数 |
 | 400 | `TOO_MANY_HOUSEHOLDS` | 对比超过 5 户 |
 | 400 | `INVALID_APPLIANCE_FILTER` | include 和 exclude 同时出现 |
 | 401 | `AUTH_INVALID_CREDENTIALS` | 用户名或密码错误 |
@@ -601,13 +602,14 @@ Authorization: Bearer <token>
 Content-Type: application/json
 ```
 
-预测只依赖室外温度、居住人口和月份，不需要 `household_id`。
+`household_id` 用于权限校验和历史取数，不作为模型特征；模型只使用室外温度、居住人口和月份。
 
 ```json
 {
-  "month": 12,
+  "household_id": 1,
+  "month": 8,
   "household_size": 3,
-  "forecast_monthly_temp_c": 8.5
+  "forecast_monthly_temp_c": 24.0
 }
 ```
 
@@ -615,9 +617,32 @@ Content-Type: application/json
 
 ```json
 {
-  "month": 12,
+  "household_id": 1,
+  "display_name": "Home 1",
+  "month": 8,
   "household_size": 3,
-  "predicted_avg_daily_kwh": 12.35,
+  "anchor_month": "2015-07",
+  "forecast_start_month": "2015-08",
+  "forecast_end_month": "2016-01",
+  "history_basis": "aggregate",
+  "history": [
+    {
+      "period": "2014-08",
+      "actual_avg_daily_kwh": 8.166,
+      "temperature_c": 15.0,
+      "reading_days": 30,
+      "total_kwh": 244.984
+    }
+  ],
+  "forecast": [
+    {
+      "period": "2015-08",
+      "predicted_avg_daily_kwh": 6.958,
+      "temperature_used_c": 24.0,
+      "monthly_energy_estimate_kwh": 215.7
+    }
+  ],
+  "predicted_avg_daily_kwh": 6.958,
   "unit": "kWh/日",
   "model_version": "linear-v1",
   "average_daily_power_curve_kw": [
@@ -626,8 +651,8 @@ Content-Type: application/json
     0.531, 0.533, 0.476, 0.516, 0.646, 0.851,
     0.891, 0.76, 0.67, 0.578, 0.478, 0.363
   ],
-  "monthly_energy_estimate_kwh": 382.9,
-  "temperature_used_c": 8.5,
+  "monthly_energy_estimate_kwh": 215.7,
+  "temperature_used_c": 24.0,
   "level_model": "LinearRegression",
   "shape_model": "LinearRegression",
   "warnings": []
@@ -636,18 +661,23 @@ Content-Type: application/json
 
 说明：
 
-- `month` 为必填的 `1–12` 整数。
+- `household_id` 必须属于当前用户可访问的家庭。
+- `month` 为必填的 `1–12` 整数，表示预测起始月份；年份由该家庭最后数据月之后的下一次该月份推导。
 - `household_size` 为必填的 `1–20` 整数，对应前端填写的居住人口。
-- `forecast_monthly_temp_c` 为必填输入，范围 `-50–60`。
-- 返回该温度、人口和月份下的典型日均用电量，单位为 `kWh/日`。
+- `forecast_monthly_temp_c` 为必填输入，范围 `-50–60`，用于预测起始月。
+- `anchor_month` 是该家庭最后一条数据所在月份；`history` 返回截至该月的最近 12 个月实际值。
+- `forecast` 从 `anchor_month` 之后的下一次 `month` 开始，连续返回 6 个月；起始月使用请求温度，其余月份使用该家庭相同月份的历史平均温度。
+- 历史总用电优先使用电器名为 `Aggregate` 的读数；如果该月没有 `Aggregate`，才汇总分项电器，避免重复计算。
 - `average_daily_power_curve_kw` 始终包含 24 个值，对应 0–23 点；其和等于日均用电量。
-- 预测结果不绑定具体家庭，相同温度、人口和月份得到相同结果。
+- `predicted_avg_daily_kwh`、`monthly_energy_estimate_kwh` 和 24 小时曲线对应预测起始月。
 
 错误：
 
+- `400 INVALID_HOUSEHOLD_ID`
 - `400 INVALID_MONTH`
 - `400 INVALID_HOUSEHOLD_SIZE`
 - `400 INVALID_TEMPERATURE`
+- `403 FORBIDDEN_HOUSEHOLD`
 - `503 MODEL_NOT_READY`
 
 ### 6.12 多月批量预测（P2）
@@ -662,11 +692,13 @@ Content-Type: application/json
 {
   "items": [
     {
+      "household_id": 1,
       "month": 1,
       "household_size": 3,
       "forecast_monthly_temp_c": 5.0
     },
     {
+      "household_id": 1,
       "month": 7,
       "household_size": 5,
       "forecast_monthly_temp_c": 28.0
@@ -943,7 +975,7 @@ Authorization: Bearer <admin-token>
 
 | 角色 | 权限 |
 |---|---|
-| `user` | 访问 `households.owner_user_id = 当前用户` 的家庭；可对比、导出；预测按输入独立计算 |
+| `user` | 访问 `households.owner_user_id = 当前用户` 的家庭；可对比、导出；预测也必须校验家庭归属 |
 | `admin` | 访问全部家庭；管理用户、家庭归属、导入、质量摘要 |
 
 ### 7.2 家庭归属校验
@@ -1127,7 +1159,7 @@ ORDER BY reading_date;
 - [ ] 5 户对比正常，6 户返回 `400`。
 - [ ] 排除冰箱后序列和平均曲线同步变化。
 - [ ] 平均曲线返回 `household_count` 和 `expected_households`。
-- [ ] 预测接口接收月份、温度和人口，返回典型日均用电量和 24 小时曲线。
+- [ ] 预测接口接收家庭、月份、温度和人口，返回最近 12 个月历史、未来 6 个月预测和 24 小时曲线。
 - [ ] 管理员可创建用户并批量设置家庭归属。
 - [ ] CSV 导入 10 万行，4 条重复被拒绝，质量摘要数据一致。
 - [ ] `/docs` 能展示全部接口并可直接调试。

@@ -253,6 +253,125 @@ def breakdown_data(
     }
 
 
+def household_monthly_totals(
+    db: Session,
+    household_id: int,
+    start_date: date,
+    end_date: date,
+) -> list[dict]:
+    aggregate_ids = set(
+        db.scalars(
+            select(Appliance.id).where(
+                func.lower(Appliance.name) == "aggregate"
+            )
+        )
+    )
+    rows = db.execute(
+        select(
+            EnergyReading.reading_date.label("reading_date"),
+            EnergyReading.appliance_id.label("appliance_id"),
+            func.sum(EnergyReading.energy_kwh).label("kwh"),
+            func.avg(EnergyReading.outdoor_temp_c).label("temp_c"),
+            func.avg(EnergyReading.household_size).label("household_size"),
+        )
+        .where(
+            EnergyReading.household_id == household_id,
+            EnergyReading.reading_date >= start_date.isoformat(),
+            EnergyReading.reading_date <= end_date.isoformat(),
+        )
+        .group_by(EnergyReading.reading_date, EnergyReading.appliance_id)
+    ).all()
+
+    daily: dict[str, dict] = {}
+    for row in rows:
+        item = daily.setdefault(
+            str(row.reading_date),
+            {
+                "aggregate_kwh": 0.0,
+                "component_kwh": 0.0,
+                "has_aggregate": False,
+                "has_components": False,
+                "temp_values": [],
+                "size_values": [],
+            },
+        )
+        if int(row.appliance_id) in aggregate_ids:
+            item["aggregate_kwh"] += float(row.kwh or 0)
+            item["has_aggregate"] = True
+        else:
+            item["component_kwh"] += float(row.kwh or 0)
+            item["has_components"] = True
+        if row.temp_c is not None:
+            item["temp_values"].append(float(row.temp_c))
+        if row.household_size is not None:
+            item["size_values"].append(float(row.household_size))
+
+    monthly: dict[str, dict] = {}
+    for reading_date, item in daily.items():
+        period = reading_date[:7]
+        month = monthly.setdefault(
+            period,
+            {
+                "total_kwh": 0.0,
+                "reading_days": 0,
+                "temp_values": [],
+                "bases": set(),
+            },
+        )
+        total_kwh = (
+            item["aggregate_kwh"]
+            if item["has_aggregate"]
+            else item["component_kwh"]
+        )
+        month["total_kwh"] += total_kwh
+        month["reading_days"] += 1
+        month["temp_values"].extend(item["temp_values"])
+        month["bases"].add(
+            "aggregate" if item["has_aggregate"] else "appliance_sum"
+        )
+
+    result = []
+    for period, month in sorted(monthly.items()):
+        days = int(month["reading_days"])
+        temps = month["temp_values"]
+        bases = month["bases"]
+        result.append(
+            {
+                "period": period,
+                "total_kwh": round(float(month["total_kwh"]), 3),
+                "actual_avg_daily_kwh": round(
+                    float(month["total_kwh"]) / days, 3
+                ),
+                "temperature_c": (
+                    round(sum(temps) / len(temps), 2) if temps else None
+                ),
+                "reading_days": days,
+                "basis": (
+                    next(iter(bases)) if len(bases) == 1 else "mixed"
+                ),
+            }
+        )
+    return result
+
+
+def household_monthly_temp_profile(
+    db: Session, household_id: int
+) -> dict[int, float]:
+    rows = db.execute(
+        select(
+            func.substr(EnergyReading.reading_date, 6, 2).label("month"),
+            func.avg(EnergyReading.outdoor_temp_c).label("temp_c"),
+        )
+        .where(EnergyReading.household_id == household_id)
+        .group_by(func.substr(EnergyReading.reading_date, 6, 2))
+    ).all()
+    return {
+        int(row.month): round(float(row.temp_c), 2)
+        for row in rows
+        if row.month is not None and row.temp_c is not None
+    }
+
+
 def _household_stats(
     db: Session, household_ids: list[int] | None = None
 ) -> dict[int, dict]:
