@@ -2,13 +2,16 @@
 import { computed } from 'vue'
 import { useEnergyStore } from '../stores/energy'
 import { applianceMix } from '../utils/appliances'
-import { formatCompact } from '../utils/format'
+import { formatCompact, formatPeriodCn } from '../utils/format'
 
 const store = useEnergyStore()
 const state = store.state
 const mix = computed(() => applianceMix(state.breakdown))
 const caption = computed(() => {
-  if (store.granularity() === 'month') return `${store.activeEndDate().slice(0, 4)} 年度`
+  if (store.granularity() === 'month') {
+    const range = store.rangeParams()
+    return `${formatPeriodCn(range.start)} — ${formatPeriodCn(range.end)}`
+  }
   if (state.rangeMode === '7d') return '近 7 天'
   return '近 30 天'
 })

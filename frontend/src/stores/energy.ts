@@ -18,7 +18,13 @@ import type {
   RangeOption
 } from '../api/types'
 import { PALETTE } from '../data/constants'
-import { downloadBlob, formatPeriodCn, isoDate, periodYear } from '../utils/format'
+import {
+  addDays,
+  downloadBlob,
+  formatPeriodCn,
+  isoDate,
+  periodYear
+} from '../utils/format'
 
 export type RangeMode = '7d' | '30d' | '12m'
 export type FilterMode = 'all' | 'exclude-ac' | 'exclude-heater' | 'exclude-fridge'
@@ -183,7 +189,12 @@ function rangeParams(): RangeParams {
     date.setUTCDate(date.getUTCDate() - 29)
     start = isoDate(date)
   } else {
-    start = `${periodYear(end)}-01-01`
+    const endYear = Number(periodYear(end))
+    const endMonth = Number(end.slice(5, 7))
+    const startIndex = endYear * 12 + endMonth - 12
+    const startYear = Math.floor(startIndex / 12)
+    const startMonth = (startIndex % 12) + 1
+    start = `${startYear}-${String(startMonth).padStart(2, '0')}-01`
   }
   return {
     start,
@@ -191,6 +202,37 @@ function rangeParams(): RangeParams {
     granularity: granularity(),
     periodLabel: formatPeriodCn(end)
   }
+}
+
+function expectedPeriods(start: string, end: string, unit: Granularity): string[] {
+  const periods: string[] = []
+  if (unit === 'day') {
+    let cursor = start
+    while (cursor <= end) {
+      periods.push(cursor)
+      cursor = addDays(cursor, 1)
+    }
+    return periods
+  }
+  if (unit === 'month') {
+    let year = Number(start.slice(0, 4))
+    let month = Number(start.slice(5, 7))
+    const endYear = Number(end.slice(0, 4))
+    const endMonth = Number(end.slice(5, 7))
+    while (year < endYear || (year === endYear && month <= endMonth)) {
+      periods.push(`${year}-${String(month).padStart(2, '0')}`)
+      month += 1
+      if (month > 12) {
+        month = 1
+        year += 1
+      }
+    }
+    return periods
+  }
+  for (let year = Number(start.slice(0, 4)); year <= Number(end.slice(0, 4)); year += 1) {
+    periods.push(String(year))
+  }
+  return periods
 }
 
 function buildQueryParams(): URLSearchParams {
@@ -263,9 +305,11 @@ async function loadLiveData(): Promise<void> {
     ])
     if (sequence !== requestSeq) return
 
-    const allPeriods = Array.from(
-      new Set(seriesResponse.items.map((item) => item.period))
-    ).sort()
+    const allPeriods = expectedPeriods(
+      range.start,
+      range.end,
+      range.granularity
+    )
     energy.seriesData = energy.selectedIds.map((id, index) => {
       const rows = seriesResponse.items.filter((item) => item.household_id === id)
       const rowMap = new Map(rows.map((row) => [row.period, row]))

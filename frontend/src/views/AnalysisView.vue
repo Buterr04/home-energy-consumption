@@ -4,7 +4,7 @@ import CompareTable from '../components/CompareTable.vue'
 import TrendChart from '../components/TrendChart.vue'
 import { useEnergyStore } from '../stores/energy'
 import { applianceMix } from '../utils/appliances'
-import { formatKwh, formatNumber } from '../utils/format'
+import { formatKwh, formatNumber, formatPeriodCn } from '../utils/format'
 
 const store = useEnergyStore()
 const state = store.state
@@ -31,7 +31,10 @@ const averagePeople = computed(() => {
   return sizes.reduce((sum, value) => sum + value, 0) / sizes.length
 })
 const mixCaption = computed(() => {
-  if (store.granularity() === 'month') return `${store.activeEndDate().slice(0, 4)} 年度`
+  if (store.granularity() === 'month') {
+    const range = store.rangeParams()
+    return `${formatPeriodCn(range.start)} — ${formatPeriodCn(range.end)}`
+  }
   return state.rangeMode === '7d' ? '近 7 天' : '近 30 天'
 })
 </script>

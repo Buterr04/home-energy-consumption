@@ -22,6 +22,10 @@ const hoverIndex = ref<number | null>(null)
 const hoverPercent = ref(0)
 const filterOpen = ref(false)
 const filterWrap = ref<HTMLElement | null>(null)
+const chartStage = ref<HTMLElement | null>(null)
+const chartWidth = ref(920)
+const chartHeight = ref(320)
+let chartResizeObserver: ResizeObserver | null = null
 
 const chart = computed(() =>
   buildChart(
@@ -29,7 +33,9 @@ const chart = computed(() =>
     state.averageData,
     store.granularity(),
     hoverIndex.value,
-    hoverPercent.value
+    hoverPercent.value,
+    chartWidth.value,
+    chartHeight.value
   )
 )
 
@@ -37,7 +43,7 @@ const chartWindowLabel = computed(() => {
   const periods = chart.value.periods
   if (!periods.length) return '暂无数据'
   if (store.granularity() === 'month') {
-    return `${periods[0].slice(0, 4)} 年 1 月 — 12 月`
+    return `${formatPeriodCn(periods[0])} — ${formatPeriodCn(periods[periods.length - 1])}`
   }
   return `${formatPeriodCn(periods[0])} — ${formatPeriodCn(periods[periods.length - 1])}`
 })
@@ -100,8 +106,22 @@ function handleDocumentClick(event: MouseEvent): void {
   }
 }
 
-onMounted(() => document.addEventListener('click', handleDocumentClick))
-onBeforeUnmount(() => document.removeEventListener('click', handleDocumentClick))
+onMounted(() => {
+  document.addEventListener('click', handleDocumentClick)
+  if (chartStage.value) {
+    chartResizeObserver = new ResizeObserver((entries) => {
+      const rect = entries[0]?.contentRect
+      if (!rect) return
+      chartWidth.value = Math.max(280, Math.round(rect.width))
+      chartHeight.value = Math.max(190, Math.round(rect.height))
+    })
+    chartResizeObserver.observe(chartStage.value)
+  }
+})
+onBeforeUnmount(() => {
+  document.removeEventListener('click', handleDocumentClick)
+  chartResizeObserver?.disconnect()
+})
 </script>
 
 <template>
@@ -111,6 +131,7 @@ onBeforeUnmount(() => document.removeEventListener('click', handleDocumentClick)
         <h2>{{ props.title }}</h2>
         <p>
           {{ chartWindowLabel }} · {{ chartSubtitle }}
+          · 缺失周期按相邻观测点连接
           <template v-if="props.analysis"> · 最多 5 户同时对比</template>
         </p>
       </div>
@@ -164,13 +185,14 @@ onBeforeUnmount(() => document.removeEventListener('click', handleDocumentClick)
     </div>
 
     <div
+      ref="chartStage"
       class="chart-stage"
       @mousemove="onChartMove"
       @mouseleave="hoverIndex = null"
     >
       <svg
         class="chart-svg"
-        viewBox="0 0 920 320"
+        :viewBox="`0 0 ${chart.width} ${chart.height}`"
         role="img"
         aria-label="所选家庭用电趋势折线图"
       >

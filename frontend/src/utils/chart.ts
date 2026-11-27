@@ -59,32 +59,17 @@ function smoothPath(points: ChartPoint[]): string {
   return path
 }
 
-function tickIndexes(count: number): number[] {
-  if (count <= 7) return Array.from({ length: count }, (_, index) => index)
-  if (count <= 12) {
-    const ticks: number[] = []
-    for (let index = 0; index < count; index += 2) ticks.push(index)
-    if (ticks[ticks.length - 1] !== count - 1) ticks.push(count - 1)
-    return ticks
+function tickIndexes(count: number, width: number): number[] {
+  if (count <= 1) return count ? [0] : []
+  const maxTicks = width < 420 ? 4 : width < 680 ? 5 : 7
+  if (count <= maxTicks) {
+    return Array.from({ length: count }, (_, index) => index)
   }
-  return [0, 5, 10, 15, 20, 25, count - 1].filter(
-    (index, position, array) => index < count && array.indexOf(index) === position
-  )
-}
-
-function splitPointRuns(values: Array<number | null>): ChartPoint[][] {
-  const runs: ChartPoint[][] = []
-  let current: ChartPoint[] = []
-  values.forEach((value, index) => {
-    if (value === null || !Number.isFinite(value)) {
-      if (current.length) runs.push(current)
-      current = []
-      return
-    }
-    current.push({ x: index, y: index, value, index })
-  })
-  if (current.length) runs.push(current)
-  return runs
+  const indexes = new Set<number>()
+  for (let slot = 0; slot < maxTicks; slot += 1) {
+    indexes.add(Math.round(((count - 1) * slot) / (maxTicks - 1)))
+  }
+  return Array.from(indexes).sort((a, b) => a - b)
 }
 
 export function buildChart(
@@ -92,10 +77,10 @@ export function buildChart(
   averageData: AverageSeriesPoint[],
   granularity: Granularity,
   hoverIndex: number | null,
-  _hoverPercent: number
+  _hoverPercent: number,
+  width = 920,
+  height = 320
 ): ChartGeometry {
-  const width = 920
-  const height = 320
   const pad = { top: 24, right: 16, bottom: 34, left: 44 }
   const plotWidth = width - pad.left - pad.right
   const plotHeight = height - pad.top - pad.bottom
@@ -159,10 +144,16 @@ export function buildChart(
   const xAt = (index: number) => pad.left + (plotWidth * index) / Math.max(1, periods.length - 1)
   const yAt = (value: number) => pad.top + plotHeight - ((value - yMin) / Math.max(0.001, yMax - yMin)) * plotHeight
 
-  const buildPaths = (values: Array<number | null>): string[] =>
-    splitPointRuns(values).map((run) =>
-      smoothPath(run.map((point) => ({ ...point, x: xAt(point.index), y: yAt(point.value) })))
-    )
+  const buildPaths = (values: Array<number | null>): string[] => {
+    const points = values
+      .map((value, index) =>
+        value === null || !Number.isFinite(value)
+          ? null
+          : { x: xAt(index), y: yAt(value), value, index }
+      )
+      .filter((point): point is ChartPoint => point !== null)
+    return points.length ? [smoothPath(points)] : []
+  }
 
   const series = rawSeries.map((item) => {
     const numericPoints = item.values
@@ -181,16 +172,20 @@ export function buildChart(
   })
 
   const bottomY = pad.top + plotHeight
-  const avgRuns = splitPointRuns(avgValues).map((run) =>
-    run.map((point) => ({ ...point, x: xAt(point.index), y: yAt(point.value) }))
-  )
-  const avgPaths = avgRuns.map((run) => smoothPath(run))
-  const avgAreas = avgRuns
-    .filter((run) => run.length > 1)
-    .map((run) => {
-      const line = run.map((point) => `${point.x.toFixed(2)} ${point.y.toFixed(2)}`).join(' L ')
-      return `M ${run[0].x.toFixed(2)} ${bottomY} L ${line} L ${run[run.length - 1].x.toFixed(2)} ${bottomY} Z`
-    })
+  const avgPoints = avgValues
+    .map((value, index) =>
+      value === null ? null : { x: xAt(index), y: yAt(value), value, index }
+    )
+    .filter((point): point is ChartPoint => point !== null)
+  const avgPaths = avgPoints.length ? [smoothPath(avgPoints)] : []
+  const avgAreas =
+    avgPoints.length > 1
+      ? [
+          `M ${avgPoints[0].x.toFixed(2)} ${bottomY} L ${avgPoints
+            .map((point) => `${point.x.toFixed(2)} ${point.y.toFixed(2)}`)
+            .join(' L ')} L ${avgPoints[avgPoints.length - 1].x.toFixed(2)} ${bottomY} Z`
+        ]
+      : []
 
   const yTicks = Array.from({ length: 4 }, (_, index) => {
     const ratio = index / 3
@@ -229,7 +224,7 @@ export function buildChart(
     avgValues,
     series,
     yTicks,
-    xTicks: tickIndexes(periods.length).map((index) => ({
+    xTicks: tickIndexes(periods.length, width).map((index) => ({
       index,
       x: xAt(index),
       label: formatPeriodShort(periods[index])

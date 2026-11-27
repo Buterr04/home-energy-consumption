@@ -9,7 +9,9 @@ const state = store.state
 
 const periodLabel = computed(() => {
   const range = store.rangeParams()
-  if (store.granularity() === 'month') return `${range.start.slice(0, 4)} 年度`
+  if (store.granularity() === 'month') {
+    return `${formatPeriodCn(range.start)} — ${formatPeriodCn(range.end)}`
+  }
   return `${formatPeriodCn(range.start)} — ${formatPeriodCn(range.end)}`
 })
 
